@@ -1,0 +1,18 @@
+Falsifies `extensible_host_controller_interface::verification::the_interrupt_interval_is_the_exponent_the_specification_asks_for`.
+
+The defect: the full- and low-speed exponent is computed one too high, so the period is up to twice the device's stated period.
+
+Expected to fail: the harness's check that `2^interval` microframes do not exceed the device's period.
+
+diff --git a/src/context.rs b/src/context.rs
+--- a/src/context.rs
++++ b/src/context.rs
+@@ -142,7 +142,7 @@
+             descriptor_interval
+         }) as u32
+             * 8;
+-        let exponent = 31 - microframes.leading_zeros();
++        let exponent = 32 - microframes.leading_zeros();
+         let exponent = if exponent < 3 { 3 } else { exponent };
+         (if exponent > 10 { 10 } else { exponent }) as u8
+     } else {

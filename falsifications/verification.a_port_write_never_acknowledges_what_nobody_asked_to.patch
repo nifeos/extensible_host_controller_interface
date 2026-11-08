@@ -1,0 +1,18 @@
+Falsifies `extensible_host_controller_interface::verification::a_port_write_never_acknowledges_what_nobody_asked_to`.
+
+The defect: `write_value` writes back the whole register read, so the write-one-to-clear change bits and the Port Enabled bit are written as 1, which disables the port and acknowledges changes nobody has looked at.
+
+Expected to fail: the harness's check that writing nothing writes no change bit.
+
+diff --git a/src/port.rs b/src/port.rs
+--- a/src/port.rs
++++ b/src/port.rs
+@@ -91,7 +91,7 @@
+ /// **What to write to set `bits`** without disabling the port or acknowledging a change nobody
+ /// asked to: `port_status_and_control`'s preserved bits, plus `bits`.
+ pub const fn write_value(port_status_and_control: u32, bits: u32) -> u32 {
+-    (port_status_and_control & PRESERVE) | bits
++    port_status_and_control | bits
+ }
+ 
+ /// **Endpoint 0's packet size before the device has said**, by speed (xHCI 1.2 section 4.3): 8 for low

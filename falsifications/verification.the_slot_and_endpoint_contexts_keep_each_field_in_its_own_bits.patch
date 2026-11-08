@@ -1,0 +1,18 @@
+Falsifies `extensible_host_controller_interface::verification::the_slot_and_endpoint_contexts_keep_each_field_in_its_own_bits`.
+
+The defect: `slot` forgets to mask the speed id to its four bits, so a speed id above 15 spills into the context count and the reserved bits beside it.
+
+Expected to fail: the harness's check that dword 0 holds nothing outside the speed and context count fields, or that the speed reads back masked to four bits.
+
+diff --git a/src/context.rs b/src/context.rs
+--- a/src/context.rs
++++ b/src/context.rs
+@@ -49,7 +49,7 @@
+ /// context is DCI `entries`. Route string 0: the device is on a root port, not behind a hub.
+ pub const fn slot(speed: u8, port: u8, entries: u8) -> [u32; 8] {
+     [
+-        (speed as u32 & 0xf) << 20 | (entries as u32 & 0x1f) << 27,
++        (speed as u32) << 20 | (entries as u32 & 0x1f) << 27,
+         (port as u32) << 16,
+         0,
+         0,
