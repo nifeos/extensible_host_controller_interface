@@ -1,11 +1,11 @@
 # extensible_host_controller_interface
 
-Everything a Universal Serial Bus (USB) host controller (xHCI) driver computes, with nothing it touches: register offsets
-and field decode, Transfer Request Block (TRB) construction and decode, the producer and event ring
-cycle discipline, slot and endpoint contexts, port status and the port debounce. The caller performs
-every volatile access and owns the direct memory access (DMA) memory; this crate supplies the
-arithmetic, so it runs in `no_std`, tests on the host and suits a model checker. It does not touch
-hardware, allocate, or drive a controller on its own.
+Everything a Universal Serial Bus (USB) host controller (xHCI) driver computes, with nothing it
+touches. That covers register offsets and field decode, Transfer Request Block (TRB) construction
+and decode, the producer and event ring cycle discipline, slot and endpoint contexts, port status
+and the port debounce. The caller performs every volatile access and owns the direct memory access
+(DMA) memory. This crate supplies the arithmetic, so it runs in `no_std`, tests on the host and
+suits a model checker. It does not touch hardware, allocate, or drive a controller on its own.
 
 ## EXAMPLES
 
@@ -35,26 +35,26 @@ Seven [Kani](https://github.com/model-checking/kani) harnesses, in `src/verifica
   on its link slot or past its end, and places the link exactly on the last slot.
 - `the_event_ring_stays_in_bounds_and_flips_only_at_the_wrap`: from every reachable state, consuming
   an event leaves the dequeue index inside the segment, flips the cycle bit exactly when the index
-  wraps to zero, and keeps the `ERDP` address inside the segment. The segment is assumed not to run
-  past the end of the 64-bit address space.
+  wraps to zero, and keeps the `ERDP` address inside the segment. The proof assumes the segment does not
+  run past the end of the 64-bit address space.
 - `the_capability_walk_ends_and_stays_inside_the_limit`: for any start, limit and id, and any dword
-  the controller returns at each read, `find_extended` makes at most 64 reads, each at a nonzero
-  offset whose whole dword is inside `limit` and past the previous read, and returns only an offset
+  the controller returns at each read, `find_extended` makes at most 64 reads. Each read is at a nonzero
+  offset whose whole dword is inside `limit` and past the previous read. The result is only an offset
   it read whose id matched.
 - `a_device_context_index_is_one_to_thirty_one_and_distinct`: for every endpoint address, the device
   context index is from 1 to 31, endpoint 0 is index 1 in both directions, two different endpoints
-  never share an index, and the offsets of every index lie inside a 32- or 64-byte-per-context
+  never share an index. The offsets of every index lie inside a 32- or 64-byte-per-context
   device or input context.
 - `the_slot_and_endpoint_contexts_keep_each_field_in_its_own_bits`: for every input, a slot context
   and an endpoint context read back each field from exactly the bits the specification gives it,
-  the dequeue pointer is reassembled from its two dwords, and the reserved dwords stay zero.
+  the dequeue pointer reassembles from its two dwords, and the reserved dwords stay zero.
 - `a_port_write_never_acknowledges_what_nobody_asked_to`: for any port status register value,
   `write_value` writes the preserved bits plus exactly the bits asked for, so writing nothing writes
-  no change bit, no Port Enabled bit and no reset; the speed id is the four bits it comes from.
+  no change bit, no Port Enabled bit and no reset. The speed id is the four bits it comes from.
 - `the_interrupt_interval_is_the_exponent_the_specification_asks_for`: for any speed and
   `bInterval`, a full- or low-speed interval is the largest exponent within the device's period,
-  between 3 and 10, and any other is the device's exponent less one; the default control packet is
-  known for speeds 1 to 5 and no others.
+  between 3 and 10, and any other is the device's exponent less one. The default control packet exists for
+  speeds 1 to 5 and no others.
 
 The proofs need Kani, which `rustup` does not install. Run `cargo install --locked
 kani-verifier --version 0.68.0`, then `cargo kani setup`. The setup step downloads a model
@@ -62,14 +62,14 @@ checker, so it needs network access. CI uses version 0.68.0, and another version
 differently.
 
 Rerun them with `cargo kani` from the crate's directory. Each harness has a falsification patch at
-`falsifications/<module.path>.<harness>.patch`; apply it with `patch -p3` and the harness fails at
+`falsifications/<module.path>.<harness>.patch`; apply it with `patch -p1` and the harness fails at
 its own assertion, which shows the proof checks something real. Revert the patch afterward.
 
 Not yet proven: event decoding.
 
 ## BUGS
 
-- Hubs are not modeled (route string 0), so a device behind a hub cannot be addressed. Only devices
+- Hubs are not modeled (route string 0), so the crate cannot address a device behind a hub. Only devices
   on the root ports work.
 - One page size: the DMA layout assumes 4 KiB pages (`PAGESIZE` bit 0).
 - No streams, isochronous or bulk transfers: the crate builds the TRBs a boot keyboard needs and
