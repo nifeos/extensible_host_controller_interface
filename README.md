@@ -1,5 +1,10 @@
 # extensible_host_controller_interface
 
+[![check](https://github.com/nifeos/extensible_host_controller_interface/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nifeos/extensible_host_controller_interface/actions/workflows/ci.yml?query=branch%3Amain)
+[![proofs](https://github.com/nifeos/extensible_host_controller_interface/actions/workflows/proofs.yml/badge.svg?branch=main)](https://github.com/nifeos/extensible_host_controller_interface/actions/workflows/proofs.yml?query=branch%3Amain)
+[![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](https://github.com/nifeos/extensible_host_controller_interface#license)
+[![minimum Rust version](https://img.shields.io/badge/rust-1.88%2B-blue.svg)](https://github.com/nifeos/extensible_host_controller_interface/blob/main/Cargo.toml)
+
 Everything a Universal Serial Bus (USB) host controller (xHCI) driver computes, with nothing it
 touches. That covers register offsets and field decode, Transfer Request Block (TRB) construction
 and decode, the producer and event ring cycle discipline, slot and endpoint contexts, port status

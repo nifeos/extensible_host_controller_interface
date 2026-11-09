@@ -327,7 +327,7 @@ mod tests {
         let end = loop {
             assert!(t < DEBOUNCE_TIMEOUT_MILLISECONDS, "the wait never ended");
             t += DEBOUNCE_STEP_MILLISECONDS;
-            let bouncing = if (t / DEBOUNCE_STEP_MILLISECONDS) % 2 == 0 {
+            let bouncing = if (t / DEBOUNCE_STEP_MILLISECONDS).is_multiple_of(2) {
                 ports(&[3])
             } else {
                 ports(&[])
