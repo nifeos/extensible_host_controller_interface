@@ -1,4 +1,3 @@
-
 /// The command or transfer did what was asked.
 pub const SUCCESS: u8 = 1;
 /// USB transaction error: the device did not answer, or answered garbage.

@@ -1,4 +1,3 @@
-
 /// Normal: a data buffer on a bulk or interrupt ring.
 pub const NORMAL: u8 = 1;
 /// Setup Stage of a control transfer.
