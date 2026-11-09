@@ -14,7 +14,7 @@
 //!
 //! - One page size: [`direct_memory_access`] assumes 4 KiB (`PAGESIZE` bit 0), and the driver refuses otherwise.
 //! - No streams, isochronous or bulk: the TRBs a keyboard needs and nothing more.
-//! - Hubs are not modelled (route string 0), so a device behind a hub cannot be addressed.
+//! - Hubs are not modeled (route string 0), so a device behind a hub cannot be addressed.
 
 #[cfg(doctest)]
 #[doc = include_str!("../README.md")]
