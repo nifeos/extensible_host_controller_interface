@@ -1,8 +1,8 @@
 # Stranger run, 2026-11-11
 
 The first run of this repository's stranger test. This page records what the stranger did, what
-it found, and where the README was not enough. The run changed nothing in the README; each finding
-below is open.
+it found, and where the README was not enough. The run changed nothing in the README. The README now
+covers each finding below.
 
 ## How it was run
 
