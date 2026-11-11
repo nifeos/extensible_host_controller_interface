@@ -64,7 +64,7 @@ fn the_event_ring_laps() {
 
 #[test]
 fn a_setup_transfer_request_block_carries_the_packet_and_the_transfer_type() {
-    let t = TransferRequestBlock::setup(0x0008_0000_0100_0680, Some(true));
+    let t = TransferRequestBlock::setup(0x0008_0000_0100_0680, TransferType::DeviceToHost);
     assert_eq!(t.0[0], 0x0100_0680);
     assert_eq!(t.0[1], 0x0008_0000);
     assert_eq!(t.0[2], 8);
@@ -154,12 +154,12 @@ fn a_simulated_controller_runs_exactly_what_was_produced_across_laps() {
 /// which is what the driver waits for; the data stage asks only on a short packet.
 #[test]
 fn control_transfers_agree_on_direction_in_all_three_shapes() {
-    for (data_in, transfer_type, status_in) in [
-        (None, 0, true),
-        (Some(false), 2, true),
-        (Some(true), 3, false),
+    for (shape, data_in, transfer_type, status_in) in [
+        (TransferType::NoDataStage, None, 0, true),
+        (TransferType::HostToDevice, Some(false), 2, true),
+        (TransferType::DeviceToHost, Some(true), 3, false),
     ] {
-        let setup = TransferRequestBlock::setup(0, data_in);
+        let setup = TransferRequestBlock::setup(0, shape);
         assert_eq!((setup.0[3] >> 16) & 3, transfer_type);
         let status = TransferRequestBlock::status(data_in == Some(true));
         assert_eq!(status.kind(), transfer_request_block_type::STATUS);

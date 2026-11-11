@@ -417,7 +417,7 @@ fn the_capability_registers_decode_each_field_from_its_own_bits() {
 /// **The port debounce answers by its timeout, and says settled exactly when nothing changed for
 /// the stable interval**, over four samples at any times that do not run backwards and any
 /// connections seen. A sample at or past [`port::DEBOUNCE_TIMEOUT_MILLISECONDS`] from the start is
-/// never `None`, and a `Some(true)` comes only after [`port::DEBOUNCE_STABLE_MILLISECONDS`] with
+/// never `Pending`, and a `Settled` comes only after [`port::DEBOUNCE_STABLE_MILLISECONDS`] with
 /// the same connections.
 #[kani::proof]
 // Comparing two 32-byte connection sets is a `memcmp` loop of 32 steps, past the four samples.
@@ -441,11 +441,11 @@ fn the_port_debounce_answers_by_its_timeout() {
         let answer = debounce.sample(now, seen);
         let settled = now - changed >= port::DEBOUNCE_STABLE_MILLISECONDS;
         let timed_out = now - start >= port::DEBOUNCE_TIMEOUT_MILLISECONDS;
-        assert_eq!(answer == Some(true), settled);
+        assert_eq!(answer == port::DebounceVerdict::Settled, settled);
         if timed_out {
-            assert!(answer.is_some());
+            assert_ne!(answer, port::DebounceVerdict::Pending);
         } else {
-            assert_ne!(answer, Some(false));
+            assert_ne!(answer, port::DebounceVerdict::TimedOut);
         }
     }
 }

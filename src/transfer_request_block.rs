@@ -52,6 +52,23 @@ pub const fn fits_one_transfer_request_block(buffer: u64, len: u16) -> bool {
     (buffer & 0xffff) + len as u64 <= 0x1_0000
 }
 
+/// **A control transfer's shape**: the Transfer Type field of its Setup Stage TRB (xHCI 1.2
+/// section 6.4.1.2.1), each variant's value its code. Code 1 is reserved and has no variant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+#[doc(alias = "TRT")]
+pub enum TransferType {
+    /// No Data Stage: the Status Stage follows the Setup Stage.
+    #[doc(alias = "No Data Stage")]
+    NoDataStage = 0,
+    /// A Data Stage host to device.
+    #[doc(alias = "OUT Data Stage")]
+    HostToDevice = 2,
+    /// A Data Stage device to host.
+    #[doc(alias = "IN Data Stage")]
+    DeviceToHost = 3,
+}
+
 pub(crate) const fn control(kind: u8) -> u32 {
     (kind as u32) << 10
 }
@@ -177,15 +194,10 @@ impl TransferRequestBlock {
         )
     }
 
-    /// A control transfer's Setup Stage, the eight-byte packet carried immediately. `data_in` is
-    /// `Some(true)` for a data stage device to host, `Some(false)` host to device, `None` for none
-    /// (the Transfer Type field, xHCI 1.2 section 6.4.1.2.1).
-    pub const fn setup(packet: u64, data_in: Option<bool>) -> TransferRequestBlock {
-        let transfer_type = match data_in {
-            None => 0,
-            Some(false) => 2,
-            Some(true) => 3,
-        };
+    /// A control transfer's Setup Stage, the eight-byte packet carried immediately, and
+    /// `transfer_type` saying whether a Data Stage follows and which way it flows.
+    pub const fn setup(packet: u64, transfer_type: TransferType) -> TransferRequestBlock {
+        let transfer_type = transfer_type as u32;
         TransferRequestBlock([
             packet as u32,
             (packet >> 32) as u32,

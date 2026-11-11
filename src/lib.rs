@@ -53,7 +53,9 @@ mod transfer_request_block;
 pub use context::interrupt_interval;
 pub use event::Event;
 pub use ring::{EventRing, ProducerRing, TransferRequestBlockPlacement};
-pub use transfer_request_block::{TransferRequestBlock, fits_one_transfer_request_block};
+pub use transfer_request_block::{
+    TransferRequestBlock, TransferType, fits_one_transfer_request_block,
+};
 
 #[cfg(kani)]
 mod verification;

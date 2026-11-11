@@ -14,7 +14,8 @@
 use extensible_host_controller_interface::context::slot_device_number;
 use extensible_host_controller_interface::port::{
     CHANGES, CONNECTED, Connections, DEBOUNCE_STABLE_MILLISECONDS, DEBOUNCE_TIMEOUT_MILLISECONDS,
-    ENABLED, POWER, PortDebounce, RESET, default_control_packet, speed_name, speed_of, write_value,
+    DebounceVerdict, ENABLED, POWER, PortDebounce, RESET, default_control_packet, speed_name,
+    speed_of, write_value,
 };
 use libfuzzer_sys::fuzz_target;
 
@@ -76,11 +77,11 @@ fuzz_target!(|data: &[u8]| {
         let timed_out = now_milliseconds - start_milliseconds >= DEBOUNCE_TIMEOUT_MILLISECONDS;
         let answer = debounce.sample(now_milliseconds, seen);
         let expected = if stable {
-            Some(true)
+            DebounceVerdict::Settled
         } else if timed_out {
-            Some(false)
+            DebounceVerdict::TimedOut
         } else {
-            None
+            DebounceVerdict::Pending
         };
         assert_eq!(answer, expected);
     }

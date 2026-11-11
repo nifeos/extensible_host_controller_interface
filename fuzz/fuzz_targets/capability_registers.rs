@@ -111,17 +111,20 @@ fuzz_target!(|data: &[u8]| {
     // Every port's register follows the last at the 16-byte stride, from the operational base.
     let mut previous = None;
     for port in 1..=capabilities.maximum_ports {
-        let offset = capabilities.port_status_and_control(port);
+        let offset = capabilities
+            .port_status_and_control(port)
+            .expect("every port up to the maximum has a register");
         assert!(offset >= capabilities.operational);
         if let Some(before) = previous {
             assert_eq!(offset, before + 0x10);
         }
         previous = Some(offset);
     }
-    assert_eq!(
-        capabilities.port_status_and_control(0),
-        capabilities.port_status_and_control(1)
-    );
+    // Port 0 and a port past the maximum have no register.
+    assert_eq!(capabilities.port_status_and_control(0), None);
+    if let Some(past) = capabilities.maximum_ports.checked_add(1) {
+        assert_eq!(capabilities.port_status_and_control(past), None);
+    }
     for slot in 0..=capabilities.maximum_slots {
         assert_eq!(
             capabilities.doorbell(slot),
