@@ -61,16 +61,63 @@ Seven [Kani](https://github.com/model-checking/kani) harnesses, in `src/verifica
   between 3 and 10, and any other is the device's exponent less one. The default control packet exists for
   speeds 1 to 5 and no others.
 
+Install Kani and run them as "Building and testing" below describes.
+
+Not yet proven: event decoding.
+
+## Building and testing
+
+```sh
+cargo build
+cargo test
+rustup target add x86_64-unknown-none aarch64-unknown-none-softfloat riscv64imac-unknown-none-elf
+cargo build --lib --target x86_64-unknown-none   # also aarch64-unknown-none-softfloat, riscv64imac-unknown-none-elf
+```
+
+Run `rustup target add` once, before the first bare-metal build. Without it, that build stops with
+`can't find crate for core`. The tests run on the host in about a second.
+
+### Running the proofs
+
 The proofs need Kani, which `rustup` does not install. Run `cargo install --locked
 kani-verifier --version 0.68.0`, then `cargo kani setup`. The setup step downloads a model
 checker, so it needs network access. CI uses version 0.68.0, and another version may verify
 differently.
 
-Rerun them with `cargo kani` from the crate's directory. Each harness has a falsification patch at
-`falsifications/<module.path>.<harness>.patch`; apply it with `patch -p1` and the harness fails at
-its own assertion, which shows the proof checks something real. Revert the patch afterward.
+Then `cargo kani`, from the crate's directory, runs all seven harnesses. On an x86_64 Linux
+desktop that takes about 1.5 to 2 minutes and peaks near 0.8 gigabytes of memory.
+`the_capability_walk_ends_and_stays_inside_the_limit` takes about three quarters of that time. CI
+runs plain `cargo kani`, with no extra flags. To run one harness, give its full path and `--exact`:
 
-Not yet proven: event decoding.
+```sh
+cargo kani --harness verification::a_producer_ring_stays_in_bounds --exact
+```
+
+A passing run prints several lines that look alarming. All of them are expected:
+
+- `warning: use of an unstable feature`, about `#![feature(register_tool)]`, which Kani sets.
+- `warning: Found the following unsupported constructs: caller_location (1), foreign function (1)`,
+  followed by "Verification will fail if one or more of these constructs is reachable". A run that
+  ends in `VERIFICATION:- SUCCESSFUL` never reached them.
+- Hundreds of `aborting path on assume(false)` lines. They mark paths that a harness's assumptions
+  rule out.
+- A check described as unreachable code. It reports code that cannot run, and it is no failure.
+- Source paths under `/home/runner/.rustup`, a directory that does not exist on your machine. They
+  come from the toolchain Kani ships.
+
+Trust the last line of the run: `Complete - 7 successfully verified harnesses, 0 failures, 7 total.`
+
+### Running one falsification patch
+
+```sh
+patch -p1 --no-backup-if-mismatch < falsifications/verification.a_producer_ring_stays_in_bounds.patch
+cargo kani --harness verification::a_producer_ring_stays_in_bounds --exact   # ends VERIFICATION:- FAILED
+git checkout -- src
+```
+
+The harness name is the part of the patch's file name after `verification.`. The run ends with
+`Complete - 0 successfully verified harnesses, 1 failures, 1 total.`, and the failed check names
+the assertion that the patch breaks. `git checkout -- src` reverts the patch.
 
 ## BUGS
 
@@ -84,7 +131,13 @@ The reference is the xHCI 1.2 specification, chapters 4 to 7.
 
 ## Minimum Rust version
 
-1.88.
+1.88. To check it, install that toolchain and its bare-metal target, then test and build with it:
+
+```sh
+rustup toolchain install 1.88 --profile minimal --target x86_64-unknown-none
+cargo +1.88 test
+cargo +1.88 build --lib --target x86_64-unknown-none
+```
 
 ## License
 
