@@ -9,7 +9,7 @@ repository = "https://github.com/nifeos/extensible_host_controller_interface"
 readme = "README.md"
 keywords = ["no-std", "kani", "driver"]
 categories = ["no-std", "embedded", "hardware-support"]
-publish = false     # the default; the allowlist lint holds the exception (crates/publish-allowlist.txt)
+publish = false     # held until the maintainers decide the first release
 
 # no_std for a kernel and a driver, std for host tests. The xHCI half of a USB keyboard driver:
 # register offsets and field decode, which register pages a confined driver is mapped, the spawn
