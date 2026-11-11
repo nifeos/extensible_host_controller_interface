@@ -1,0 +1,18 @@
+Falsifies `extensible_host_controller_interface::verification::a_producer_and_a_consumer_agree_across_the_wrap`.
+
+The defect: the link TRB loses its Toggle Cycle bit, so the controller keeps its old cycle state past the wrap while the producer flips its own.
+
+Expected to fail: the harness's check that the controller sees a TRB exactly when one is outstanding.
+
+diff --git a/src/transfer_request_block.rs b/src/transfer_request_block.rs
+--- a/src/transfer_request_block.rs
++++ b/src/transfer_request_block.rs
+@@ -88,7 +88,7 @@
+     pub const fn link(target: u64) -> TransferRequestBlock {
+         TransferRequestBlock::pointer(
+             target,
+-            [0, control(transfer_request_block_type::LINK) | 1 << 1],
++            [0, control(transfer_request_block_type::LINK)],
+         )
+     }
+ 

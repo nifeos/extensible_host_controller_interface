@@ -34,7 +34,7 @@ The caller writes each placed TRB (and the link, when `link` is `Some`) to DMA m
 
 ## What is proven
 
-Eight [Kani](https://github.com/model-checking/kani) harnesses, in `src/verification.rs`:
+Thirteen [Kani](https://github.com/model-checking/kani) harnesses, in `src/verification.rs`:
 
 - `a_producer_ring_stays_in_bounds`: from every reachable state, a producer ring never places a TRB
   on its link slot or past its end, and places the link exactly on the last slot.
@@ -63,10 +63,22 @@ Eight [Kani](https://github.com/model-checking/kani) harnesses, in `src/verifica
   `bInterval`, a full- or low-speed interval is the largest exponent within the device's period,
   between 3 and 10, and any other is the device's exponent less one. The default control packet exists for
   speeds 1 to 5 and no others.
+- `every_event_decodes_from_the_bits_the_specification_gives`: for any four dwords, an event
+  decodes to the variant its type names, each field from exactly its own bits, and the cycle bit
+  never changes what it says.
+- `every_command_trb_puts_its_slot_endpoint_and_pointer_in_their_fields`: for every input, each
+  command and data TRB holds its slot, endpoint and pointer where the specification puts them,
+  and nothing outside its fields.
+- `the_capability_registers_decode_each_field_from_its_own_bits`: for any six capability
+  registers, each decoded field comes from exactly its own bits at its own width.
+- `the_port_debounce_answers_by_its_timeout`: over four samples at times that do not run
+  backwards, the debounce never keeps reading at or past its timeout, and says settled exactly
+  when nothing changed for the stable interval.
+- `a_producer_and_a_consumer_agree_across_the_wrap`: a modeled controller follows the cycle bits
+  and the link of a ring of 3 to 5 entries, through any ten steps within the ring's capacity. It
+  sees a TRB exactly when one is outstanding, in the order the producer placed them.
 
 Install Kani and run them as "Building and testing" below describes.
-
-Not yet proven: event decoding.
 
 ## What the caller does
 
@@ -113,9 +125,9 @@ kani-verifier --version 0.68.0`, then `cargo kani setup`. The setup step downloa
 checker, so it needs network access. CI uses version 0.68.0, and another version may verify
 differently.
 
-Then `cargo kani`, from the crate's directory, runs all eight harnesses. On an x86_64 Linux
-desktop that takes about 1.5 to 2 minutes and peaks near 0.8 gigabytes of memory.
-`the_capability_walk_ends_and_stays_inside_the_limit` takes about three quarters of that time. CI
+Then `cargo kani`, from the crate's directory, runs all thirteen harnesses. On an x86_64 Linux
+desktop that takes about 2 minutes and peaks near 0.8 gigabytes of memory.
+`the_capability_walk_ends_and_stays_inside_the_limit` takes about half of that time. CI
 runs plain `cargo kani`, with no extra flags. To run one harness, give its full path and `--exact`:
 
 ```sh
@@ -134,7 +146,7 @@ A passing run prints several lines that look alarming. All of them are expected:
 - Source paths under `/home/runner/.rustup`, a directory that does not exist on your machine. They
   come from the toolchain Kani ships.
 
-Trust the last line of the run: `Complete - 8 successfully verified harnesses, 0 failures, 8 total.`
+Trust the last line of the run: `Complete - 13 successfully verified harnesses, 0 failures, 13 total.`
 
 ### Running one falsification patch
 

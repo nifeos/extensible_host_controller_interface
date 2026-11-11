@@ -1,0 +1,18 @@
+Falsifies `extensible_host_controller_interface::verification::every_event_decodes_from_the_bits_the_specification_gives`.
+
+The defect: `Event::decode` reads the endpoint id as six bits, so a reserved bit 21 above the five-bit Endpoint ID leaks into the endpoint.
+
+Expected to fail: the harness's check that the endpoint is the five bits at 16 to 20 of dword 3.
+
+diff --git a/src/event.rs b/src/event.rs
+--- a/src/event.rs
++++ b/src/event.rs
+@@ -64,7 +64,7 @@
+                 residual: words[2] & 0x00ff_ffff,
+                 code,
+                 slot,
+-                endpoint: ((words[3] >> 16) & 0x1f) as u8,
++                endpoint: ((words[3] >> 16) & 0x3f) as u8,
+             },
+             transfer_request_block_type::COMMAND_COMPLETION => Event::Command {
+                 transfer_request_block: pointer,
