@@ -53,8 +53,8 @@ Thirteen [Kani](https://github.com/model-checking/kani) harnesses, in `src/verif
 - `a_slot_context_keeps_each_field_in_its_own_bits`: for every input, a slot context reads back
   each field from exactly the bits the specification gives it, and the reserved dwords stay zero.
 - `an_endpoint_context_keeps_each_field_in_its_own_bits`: for every input, an endpoint context
-  reads back each field from exactly the bits the specification gives it. The endpoint type stays
-  in its three bits, the dequeue pointer reassembles from its two dwords, and the reserved bits
+  reads back each field from exactly the bits the specification gives it. Every endpoint type reads
+  back as its own code, the dequeue pointer reassembles from its two dwords, and the reserved bits
   and dwords stay zero.
 - `a_port_write_never_acknowledges_what_nobody_asked_to`: for any port status register value,
   `write_value` writes the preserved bits plus exactly the bits asked for, so writing nothing writes

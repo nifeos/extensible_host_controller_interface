@@ -1,7 +1,7 @@
 //! Fuzz the event ring as a controller fills it: every TRB it writes, decoded the way a driver
 //! drains them.
 //!
-//! The first byte is the segment's entry count less one, so 1 to 256 entries: the sizes a driver
+//! The first byte is the segment's entry count less 16, so 16 to 271 entries: the sizes a driver
 //! gives one segment, kept small so that a run wraps the ring often (the crate's model checker
 //! harness covers every count). Each 16 bytes after
 //! that is one TRB the controller writes, little-endian, into the next entry of the segment in
@@ -75,7 +75,7 @@ fuzz_target!(|data: &[u8]| {
     let Some((&head, writes)) = data.split_first() else {
         return;
     };
-    let entries = u16::from(head) + 1;
+    let entries = u16::from(head) + EventRing::MINIMUM_SEGMENT_ENTRIES;
     let mut ring = EventRing::new(SEGMENT_BASE, entries);
     let table_entry = ring.segment_table_entry();
     assert_eq!(

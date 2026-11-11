@@ -138,7 +138,16 @@ fn a_slot_context_keeps_each_field_in_its_own_bits() {
 /// zero.
 #[kani::proof]
 fn an_endpoint_context_keeps_each_field_in_its_own_bits() {
-    let kind: u8 = kani::any();
+    let code: u8 = kani::any();
+    let kind = match code {
+        1 => context::EndpointType::IsochronousOut,
+        2 => context::EndpointType::BulkOut,
+        3 => context::EndpointType::InterruptOut,
+        4 => context::EndpointType::Control,
+        5 => context::EndpointType::IsochronousIn,
+        6 => context::EndpointType::BulkIn,
+        _ => context::EndpointType::InterruptIn,
+    };
     let maximum_packet: u16 = kani::any();
     let interval: u8 = kani::any();
     let dequeue: u64 = kani::any();
@@ -147,12 +156,12 @@ fn an_endpoint_context_keeps_each_field_in_its_own_bits() {
     assert_eq!(endpoint[0], (interval as u32) << 16);
     assert_eq!(endpoint[1] & 1, 0);
     assert_eq!((endpoint[1] >> 1) & 0x3, 3);
-    assert_eq!((endpoint[1] >> 3) & 0x7, kind as u32 & 0x7);
+    assert_eq!((endpoint[1] >> 3) & 0x7, kind as u32);
     assert_eq!((endpoint[1] >> 6) & 0x3ff, 0);
     assert_eq!(endpoint[1] >> 16, maximum_packet as u32);
     assert_eq!(endpoint[2] as u64 | (endpoint[3] as u64) << 32, dequeue);
     assert_eq!(endpoint[4] & 0xffff, average_trb as u32);
-    let maximum_service_interval_payload = if kind == context::CONTROL {
+    let maximum_service_interval_payload = if kind == context::EndpointType::Control {
         0
     } else {
         maximum_packet as u32

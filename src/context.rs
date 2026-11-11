@@ -11,10 +11,29 @@
 use crate::port;
 use crate::port::speed;
 
-/// Endpoint type: control, bidirectional (xHCI 1.2 Table 6-9).
-pub const CONTROL: u8 = 4;
-/// Endpoint type: interrupt `IN`.
-pub const INTERRUPT_IN: u8 = 7;
+/// **The Endpoint Type field of an endpoint context** (xHCI 1.2 Table 6-9), each variant's value
+/// its code. Code 0, Not Valid, has no variant: [`endpoint`] builds only a valid context.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+#[doc(alias = "EP Type")]
+pub enum EndpointType {
+    /// An isochronous endpoint, host to device.
+    #[doc(alias = "Isoch Out")]
+    IsochronousOut = 1,
+    /// A bulk endpoint, host to device.
+    BulkOut = 2,
+    /// An interrupt endpoint, host to device.
+    InterruptOut = 3,
+    /// A control endpoint, which is bidirectional.
+    Control = 4,
+    /// An isochronous endpoint, device to host.
+    #[doc(alias = "Isoch In")]
+    IsochronousIn = 5,
+    /// A bulk endpoint, device to host.
+    BulkIn = 6,
+    /// An interrupt endpoint, device to host.
+    InterruptIn = 7,
+}
 
 /// **The device context index** of the endpoint with `endpoint_number_and_direction` (direction bit included). Endpoint 0 is 1
 /// in either direction.
@@ -79,11 +98,11 @@ pub const fn slot_device_number(context: &[u32; 8]) -> u8 {
 /// (`crate::interrupt_interval`). Three retries on error, which is the specification's suggested
 /// value for everything but isochronous.
 ///
-/// `kind` is the Endpoint Type code (xHCI 1.2 Table 6-9, [`CONTROL`] and [`INTERRUPT_IN`] among
-/// them). The context keeps only its three bits, so a code above 7 never spills into the reserved
-/// bit, Host Initiate Disable or Max Burst Size beside it.
+/// `kind` goes in the three bits of the Endpoint Type field (xHCI 1.2 Table 6-9). Every
+/// [`EndpointType`] code fits them, so nothing spills into the reserved bit, Host Initiate Disable
+/// or Max Burst Size beside it.
 pub const fn endpoint(
-    kind: u8,
+    kind: EndpointType,
     maximum_packet: u16,
     interval: u8,
     dequeue: u64,
@@ -91,14 +110,14 @@ pub const fn endpoint(
 ) -> [u32; 8] {
     // For an interrupt endpoint, the most it moves per service interval: one packet, since a
     // keyboard has no burst. Zero for control.
-    let maximum_service_interval_payload = if kind == CONTROL {
+    let maximum_service_interval_payload = if matches!(kind, EndpointType::Control) {
         0
     } else {
         maximum_packet as u32
     };
     [
         (interval as u32) << 16,
-        3 << 1 | (kind as u32 & 0x7) << 3 | (maximum_packet as u32) << 16,
+        3 << 1 | (kind as u32) << 3 | (maximum_packet as u32) << 16,
         dequeue as u32,
         (dequeue >> 32) as u32,
         average_transfer_request_block_bytes as u32 | maximum_service_interval_payload << 16,
@@ -123,7 +142,7 @@ pub const ENDPOINT_CONTEXT_FIELDS_DO_NOT_OVERLAP: () = assert!(
 /// Endpoint 0's context with a new packet size, everything else as [`endpoint`] built it for
 /// `dequeue`: what Evaluate Context takes once the device's descriptor has said its size.
 pub const fn control_endpoint(maximum_packet: u16, dequeue: u64) -> [u32; 8] {
-    endpoint(CONTROL, maximum_packet, 0, dequeue, 8)
+    endpoint(EndpointType::Control, maximum_packet, 0, dequeue, 8)
 }
 
 /// Whether `speed` is one at which `bMaxPacketSize0` is an exponent.
@@ -185,7 +204,7 @@ mod tests {
 
     #[test]
     fn an_interrupt_endpoint_context_carries_type_size_interval_and_ring() {
-        let e = endpoint(INTERRUPT_IN, 8, 6, 0x1234_5000 | 1, 8);
+        let e = endpoint(EndpointType::InterruptIn, 8, 6, 0x1234_5000 | 1, 8);
         assert_eq!((e[0] >> 16) & 0xff, 6);
         assert_eq!((e[1] >> 3) & 7, 7);
         assert_eq!((e[1] >> 1) & 3, 3);
@@ -193,7 +212,10 @@ mod tests {
         assert_eq!(e[2], 0x1234_5001);
         assert_eq!(e[4], 8 | 8 << 16);
         // A ring above 4 GiB: dword 3 is the dequeue pointer's high half.
-        assert_eq!(endpoint(INTERRUPT_IN, 8, 6, 0x5_0000_1000, 8)[3], 5);
+        assert_eq!(
+            endpoint(EndpointType::InterruptIn, 8, 6, 0x5_0000_1000, 8)[3],
+            5
+        );
     }
 
     /// **Drop flags first, add flags second** (xHCI 1.2 section 6.2.5.1): the controller reads
@@ -210,7 +232,7 @@ mod tests {
     fn endpoint_zero_is_control_with_no_periodic_payload() {
         for packet in [8u16, 64, 512] {
             let e = control_endpoint(packet, 0x6000 | 1);
-            assert_eq!((e[1] >> 3) & 7, u32::from(CONTROL));
+            assert_eq!((e[1] >> 3) & 7, EndpointType::Control as u32);
             assert_eq!((e[1] >> 1) & 3, 3);
             assert_eq!(e[1] >> 16, u32::from(packet));
             assert_eq!(e[4], 8, "average TRB 8, max ESIT payload 0");
