@@ -45,7 +45,5 @@ src/transfer_request_block.rs:247 # the type at 10:15 and the completion and sho
 src/transfer_request_block.rs:248 # the type at 10:15 and the completion and short-packet flags at 5 and 2 share no bit, so `^` is `|` (TRANSFER_CONTROL_FIELDS_DO_NOT_OVERLAP)
 src/ring.rs:105 # a TRB address is 16-byte aligned and the cycle is one bit, so they share no bit for any ring base the specification allows (64-byte aligned), and `^` is `|`
 
-# Equivalent: a clamp in interrupt_interval that no input reaches, or reaches only at the bound.
-src/context.rs:170 # microframes is at least 8, so the exponent is at least 3; the clamp to 3 gives 3 either way
-src/context.rs:171 # microframes is at most 255 * 8 = 2040, so the exponent is at most 10; the clamp to 10 gives 10 either way
-src/context.rs:175 # at exactly 16, `>=` clamps to 16, which is the value it already has
+# Equivalent: the high-speed clamp in interrupt_interval, at its bound.
+src/context.rs:174 # at exactly 16, `>=` clamps to 16, which is the value it already has

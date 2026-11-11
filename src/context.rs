@@ -155,8 +155,8 @@ pub const fn is_superspeed(speed: u8) -> bool {
 /// `descriptor_interval` is the endpoint descriptor's `bInterval`.
 ///
 /// Full- and low-speed devices state the period in 1 ms frames (1 to 255), so the field is the
-/// largest exponent whose period does not exceed it, clamped to the specification's 3 (1 ms) to
-/// 10 (128 ms). High-speed and `SuperSpeed` devices already state an exponent, plus one (1 to 16),
+/// largest exponent whose period does not exceed it. That lands in the specification's 3 (1 ms) to
+/// 10 (128 ms) for every `bInterval`, 0 read as 1. High-speed and `SuperSpeed` devices already state an exponent, plus one (1 to 16),
 /// so the field is that minus one.
 pub const fn interrupt_interval(speed: u8, descriptor_interval: u8) -> u8 {
     if speed == port::speed::FULL || speed == port::speed::LOW {
@@ -166,9 +166,8 @@ pub const fn interrupt_interval(speed: u8, descriptor_interval: u8) -> u8 {
             descriptor_interval
         }) as u32
             * 8;
-        let exponent = 31 - microframes.leading_zeros();
-        let exponent = if exponent < 3 { 3 } else { exponent };
-        (if exponent > 10 { 10 } else { exponent }) as u8
+        // 8 to 2040 microframes, so the exponent is 3 to 10 with no clamp.
+        (31 - microframes.leading_zeros()) as u8
     } else {
         let clamped_interval = if descriptor_interval == 0 {
             1

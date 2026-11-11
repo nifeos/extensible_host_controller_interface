@@ -224,6 +224,21 @@ impl Capabilities {
         self.runtime + INTERRUPTER_0_REGISTER + register_offset
     }
 
+    /// Interrupter `interrupter`'s register at `register_offset`, as an offset into the file. The
+    /// register sets sit 32 bytes apart from interrupter 0's (xHCI 1.2 section 5.5.2), so `None`
+    /// for an interrupter at or past [`maximum_interrupters`](Self::maximum_interrupters): no such
+    /// register set exists.
+    pub const fn interrupter_register(
+        &self,
+        interrupter: u16,
+        register_offset: u64,
+    ) -> Option<u64> {
+        if interrupter >= self.maximum_interrupters {
+            return None;
+        }
+        Some(self.runtime + INTERRUPTER_0_REGISTER + 32 * interrupter as u64 + register_offset)
+    }
+
     /// Slot `slot`'s doorbell (0 for the command ring), as an offset into the file.
     pub const fn doorbell(&self, slot: u8) -> u64 {
         self.doorbells + 4 * slot as u64
@@ -234,9 +249,8 @@ impl Capabilities {
 /// [`Capabilities::extended`] gives) through a `read` of dwords at byte offsets. `None` when the
 /// list has no such entry, ends, or leaves `limit` bytes.
 ///
-/// Bounded at 64 hops and by `limit`, for `pci::msix_capability`'s reason: the list is a linked list in
-/// a device's register file, so a broken controller must end the walk, not hang the kernel that is
-/// walking it.
+/// Bounded at 64 hops and by `limit`: the list is a linked list in a device's register file, so a
+/// broken controller must end the walk, not hang the driver that is walking it.
 pub fn find_extended(
     first: u64,
     limit: u64,
@@ -284,6 +298,19 @@ mod tests {
         assert_eq!(
             capabilities.interrupter(EVENT_RING_DEQUEUE_POINTER_REGISTER),
             0x1038
+        );
+        // Interrupter 7's set is the last of eight, 7 * 32 bytes past interrupter 0's.
+        assert_eq!(
+            capabilities.interrupter_register(0, EVENT_RING_DEQUEUE_POINTER_REGISTER),
+            Some(0x1038)
+        );
+        assert_eq!(
+            capabilities.interrupter_register(7, EVENT_RING_DEQUEUE_POINTER_REGISTER),
+            Some(0x1118)
+        );
+        assert_eq!(
+            capabilities.interrupter_register(8, INTERRUPTER_MANAGEMENT_REGISTER),
+            None
         );
         // Slot 0 is the command ring's doorbell, so the stride is read at 0 as well as at 1.
         assert_eq!(capabilities.doorbell(0), 0x2000);
