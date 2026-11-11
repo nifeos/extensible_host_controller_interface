@@ -1,6 +1,6 @@
 [package]
 name = "extensible_host_controller_interface"
-version = "0.1.0"
+version = "0.1.0-pre.1"
 edition = "2024"
 rust-version = "1.88"
 description = "xHCI (USB host controller) logic as pure computation: registers, TRBs, rings, contexts and HID boot reports, proven with Kani"

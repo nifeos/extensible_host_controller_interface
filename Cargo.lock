@@ -4,4 +4,4 @@ version = 4
 
 [[package]]
 name = "extensible_host_controller_interface"
-version = "0.1.0"
+version = "0.1.0-pre.1"
