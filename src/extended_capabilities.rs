@@ -66,8 +66,9 @@ impl SupportedProtocol {
 mod tests {
     use super::*;
 
-    /// QEMU's qemu-xhci with its defaults: a USB 2.0 capability for ports 1 to 4 and a USB 3.0
-    /// capability for ports 5 to 8, each with no speed id dwords.
+    /// Two runs laid out as QEMU's qemu-xhci lays them out with its defaults: USB 2 for ports 1 to 4
+    /// and USB 3 for ports 5 to 8. The second is given revision 3.2 (minor revision 20h) and three
+    /// speed id dwords, so that every field is read from a value that is not 0.
     #[test]
     fn a_controllers_two_protocols_decode() {
         let usb2 = SupportedProtocol::decode([0x0200_0802, 0x2042_5355, 0x0000_0401]);
@@ -80,8 +81,8 @@ mod tests {
         assert!(usb2.contains_port(1) && usb2.contains_port(4));
         assert!(!usb2.contains_port(5));
 
-        let usb3 = SupportedProtocol::decode([0x0300_0002, 0x2042_5355, 0x3000_0405]);
-        assert_eq!((usb3.major_revision, usb3.minor_revision), (0x03, 0x00));
+        let usb3 = SupportedProtocol::decode([0x0320_0002, 0x2042_5355, 0x3000_0405]);
+        assert_eq!((usb3.major_revision, usb3.minor_revision), (0x03, 0x20));
         assert_eq!((usb3.first_port_number, usb3.port_count), (5, 4));
         assert_eq!(usb3.speed_id_count, 3);
         assert!(!usb3.contains_port(4));
