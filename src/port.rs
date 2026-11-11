@@ -16,17 +16,17 @@ pub const POWER: u32 = 1 << 9;
 /// Connect Status Change, write one to clear.
 pub const CONNECT_CHANGE: u32 = 1 << 17;
 /// Port Enabled/Disabled Change, write one to clear.
-pub(crate) const ENABLE_CHANGE: u32 = 1 << 18;
+pub const ENABLE_CHANGE: u32 = 1 << 18;
 /// Warm Port Reset Change, write one to clear.
-pub(crate) const WARM_RESET_CHANGE: u32 = 1 << 19;
+pub const WARM_RESET_CHANGE: u32 = 1 << 19;
 /// Over-current Change, write one to clear.
-pub(crate) const OVER_CURRENT_CHANGE: u32 = 1 << 20;
+pub const OVER_CURRENT_CHANGE: u32 = 1 << 20;
 /// Port Reset Change, write one to clear.
 pub const RESET_CHANGE: u32 = 1 << 21;
 /// Port Link State Change, write one to clear.
-pub(crate) const LINK_CHANGE: u32 = 1 << 22;
+pub const LINK_CHANGE: u32 = 1 << 22;
 /// Port Config Error Change, write one to clear.
-pub(crate) const CONFIGURATION_ERROR_CHANGE: u32 = 1 << 23;
+pub const CONFIGURATION_ERROR_CHANGE: u32 = 1 << 23;
 
 /// Every change bit: what a driver writes back to acknowledge all of them.
 pub const CHANGES: u32 = CONNECT_CHANGE
@@ -74,13 +74,13 @@ pub mod speed {
     /// Full speed, 12 Mb/s: most keyboards.
     pub const FULL: u8 = 1;
     /// Low speed, 1.5 Mb/s: cheap keyboards.
-    pub(crate) const LOW: u8 = 2;
+    pub const LOW: u8 = 2;
     /// High speed, 480 Mb/s.
-    pub(crate) const HIGH: u8 = 3;
+    pub const HIGH: u8 = 3;
     /// `SuperSpeed`, 5 Gb/s.
-    pub(crate) const SUPER: u8 = 4;
+    pub const SUPER: u8 = 4;
     /// `SuperSpeedPlus`, 10 Gb/s.
-    pub(crate) const SUPER_PLUS: u8 = 5;
+    pub const SUPER_PLUS: u8 = 5;
 }
 
 /// The attached device's speed id, from bits 13:10.
