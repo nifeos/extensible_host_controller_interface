@@ -35,6 +35,10 @@ pub struct ProducerRing {
     pub(crate) entries: u16,
     pub(crate) enqueue: u16,
     pub(crate) cycle: bool,
+    /// The index of the oldest TRB the caller has not reported through
+    /// [`complete`](ProducerRing::complete): where the controller's dequeue pointer is, as far as
+    /// the completion events have said.
+    pub(crate) completed: u16,
 }
 
 /// **What [`ProducerRing::enqueue`] says to write**: the TRB at `index`, stamped with this lap's
@@ -78,6 +82,7 @@ impl ProducerRing {
             entries,
             enqueue: 0,
             cycle: true,
+            completed: 0,
         }
     }
 
@@ -100,11 +105,54 @@ impl ProducerRing {
         self.entry_physical_address(self.enqueue) | self.cycle as u64
     }
 
+    /// **How many TRBs are outstanding**: placed, and not yet reported through
+    /// [`complete`](Self::complete).
+    const fn outstanding(&self) -> u16 {
+        let usable = self.entries - 1;
+        (self.enqueue + usable - self.completed) % usable
+    }
+
+    /// **Place one TRB if the ring has room**, as [`enqueue`](Self::enqueue) does, or `None` when
+    /// [`capacity`](Self::capacity) TRBs are already outstanding. The ring knows only what
+    /// [`complete`](Self::complete) has told it, so a caller that uses this reports every
+    /// completion event for the ring there.
+    pub fn try_enqueue(
+        &mut self,
+        transfer_request_block: TransferRequestBlock,
+    ) -> Option<TransferRequestBlockPlacement> {
+        if self.outstanding() == self.capacity() {
+            return None;
+        }
+        Some(self.enqueue(transfer_request_block))
+    }
+
+    /// **Report a completion event** for the TRB at `transfer_request_block_physical_address`
+    /// (the event's TRB pointer): the controller has consumed it and every TRB before it, so
+    /// their entries are free for [`try_enqueue`](Self::try_enqueue). Answers `false`, and changes
+    /// nothing, when the address is not an outstanding TRB of this ring, such as a stale or
+    /// foreign event.
+    pub fn complete(&mut self, transfer_request_block_physical_address: u64) -> bool {
+        let usable = self.entries - 1;
+        let Some(offset) = transfer_request_block_physical_address.checked_sub(self.base) else {
+            return false;
+        };
+        if offset % 16 != 0 || offset / 16 >= u64::from(usable) {
+            return false;
+        }
+        let index = (offset / 16) as u16;
+        if (index + usable - self.completed) % usable >= self.outstanding() {
+            return false;
+        }
+        self.completed = (index + 1) % usable;
+        true
+    }
+
     /// **Place one TRB**, and the link if this fills the lap.
     ///
-    /// The ring does not know how far the controller has read, so it never refuses: the caller
-    /// keeps at most [`capacity`](Self::capacity) TRBs outstanding, counting each one out when its
-    /// completion event arrives.
+    /// This never refuses: the caller keeps at most [`capacity`](Self::capacity) TRBs
+    /// outstanding, counting each one out when its completion event arrives.
+    /// [`try_enqueue`](Self::try_enqueue) does that counting for a caller that reports each event
+    /// through [`complete`](Self::complete).
     ///
     /// The caller then writes the placement to memory in this order (xHCI 1.2 section 4.9.2:
     /// the controller takes a TRB as produced once its cycle bit matches). First dwords 0 to 2 of

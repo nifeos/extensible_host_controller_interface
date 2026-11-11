@@ -14,6 +14,7 @@ fn a_producer_ring_stays_in_bounds() {
         entries,
         enqueue,
         cycle: kani::any(),
+        completed: kani::any(),
     };
     let p = ring.enqueue(TransferRequestBlock(kani::any()));
     assert!(p.index < entries - 1);
