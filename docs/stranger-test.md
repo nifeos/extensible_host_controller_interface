@@ -13,4 +13,13 @@ What a run is:
    not against the stranger.
 4. Record the date on the line below.
 
-Last run: none
+Last run: 2026-11-11
+
+Result of that run: the stranger reached a passing build, 30 unit tests and 2 documentation tests,
+and all 7 Kani proofs in about 90 seconds, from the README alone. The same tests passed at Rust
+1.88, the stated minimum. One falsification patch made its harness fail as the README says. Kani
+0.68.0 was already on the machine, so the run did not test the install steps. It found no false
+claim. It found five places where the README left the reader to guess: the build and test commands,
+how long the proofs take and how to run one, how to run a harness against a patch and revert it,
+whether a passing run's warnings are normal, and how to check the minimum Rust version. The full
+record is in [the run appendix](stranger-test-run-2026-11-11.md).
