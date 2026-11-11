@@ -415,3 +415,94 @@ fn every_completion_code_has_its_specification_name() {
         assert_eq!(completion::name(code), "Vendor Defined Info");
     }
 }
+
+/// **`try_enqueue` refuses exactly at capacity, and `complete` frees what the controller
+/// consumed**: a four-entry ring takes two TRBs, refuses a third, and takes one more for each one
+/// reported, across the wrap.
+#[test]
+fn try_enqueue_refuses_at_capacity_until_a_completion_frees_an_entry() {
+    let mut ring = ProducerRing::new(0x1000, 4);
+    let a = ring
+        .try_enqueue(TransferRequestBlock::enable_slot())
+        .unwrap();
+    let b = ring
+        .try_enqueue(TransferRequestBlock::enable_slot())
+        .unwrap();
+    assert_eq!((a.index, b.index), (0, 1));
+    assert_eq!(ring.try_enqueue(TransferRequestBlock::enable_slot()), None);
+    assert!(ring.complete(ring.entry_physical_address(a.index)));
+    let c = ring
+        .try_enqueue(TransferRequestBlock::enable_slot())
+        .unwrap();
+    assert_eq!(c.index, 2);
+    assert!(c.link.is_some());
+    assert_eq!(ring.try_enqueue(TransferRequestBlock::enable_slot()), None);
+    // One event for the newest TRB frees both before it.
+    assert!(ring.complete(ring.entry_physical_address(c.index)));
+    let d = ring
+        .try_enqueue(TransferRequestBlock::enable_slot())
+        .unwrap();
+    let e = ring
+        .try_enqueue(TransferRequestBlock::enable_slot())
+        .unwrap();
+    assert_eq!((d.index, e.index), (0, 1));
+    assert!(!d.transfer_request_block.is_cycle());
+    assert_eq!(ring.try_enqueue(TransferRequestBlock::enable_slot()), None);
+}
+
+/// **`complete` refuses an address that is not an outstanding TRB of the ring**, and changes
+/// nothing: one below the ring, one not on a 16-byte boundary, the link entry, one past the
+/// ring, and one already reported.
+#[test]
+fn complete_refuses_what_is_not_outstanding() {
+    let mut ring = ProducerRing::new(0x1000, 4);
+    let a = ring
+        .try_enqueue(TransferRequestBlock::enable_slot())
+        .unwrap();
+    ring.try_enqueue(TransferRequestBlock::enable_slot())
+        .unwrap();
+    let before = ring;
+    for physical_address in [0xff0, 0x1008, 0x1030, 0x1040, 0x1020] {
+        assert!(!ring.complete(physical_address), "{physical_address:#x}");
+        assert_eq!(ring, before);
+    }
+    assert!(ring.complete(ring.entry_physical_address(a.index)));
+    assert!(!ring.complete(ring.entry_physical_address(a.index)));
+    assert!(ring.complete(0x1010));
+    assert!(!ring.complete(0x1010));
+    assert!(!ring.complete(0x1000));
+}
+
+/// **`complete` refuses the link entry once the ring has wrapped, and frees exactly the TRBs up
+/// to the one it is given**: in a four-entry ring with the first two TRBs reported and the next
+/// two outstanding across the wrap, the link's address is still refused; in an eight-entry ring,
+/// reporting the second of three TRBs leaves one outstanding, so five more fit and a sixth does
+/// not.
+#[test]
+fn complete_counts_by_entry_index_across_the_wrap() {
+    let mut ring = ProducerRing::new(0x1000, 4);
+    for _ in 0..2 {
+        ring.try_enqueue(TransferRequestBlock::enable_slot())
+            .unwrap();
+    }
+    assert!(ring.complete(0x1010));
+    ring.try_enqueue(TransferRequestBlock::enable_slot())
+        .unwrap();
+    ring.try_enqueue(TransferRequestBlock::enable_slot())
+        .unwrap();
+    let before = ring;
+    assert!(!ring.complete(0x1030));
+    assert_eq!(ring, before);
+
+    let mut ring = ProducerRing::new(0x1000, 8);
+    for _ in 0..3 {
+        ring.try_enqueue(TransferRequestBlock::enable_slot())
+            .unwrap();
+    }
+    assert!(ring.complete(0x1010));
+    for _ in 0..5 {
+        ring.try_enqueue(TransferRequestBlock::enable_slot())
+            .unwrap();
+    }
+    assert_eq!(ring.try_enqueue(TransferRequestBlock::enable_slot()), None);
+}

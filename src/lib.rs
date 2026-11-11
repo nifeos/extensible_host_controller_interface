@@ -16,8 +16,9 @@
 //! - One page size: [`direct_memory_access`] assumes 4 KiB (`PAGESIZE` bit 0), and the driver refuses otherwise.
 //! - No streams, isochronous or bulk: the TRBs a keyboard needs and nothing more.
 //! - Hubs are not modeled (route string 0), so a device behind a hub cannot be addressed.
-//! - A [`ProducerRing`] never refuses a TRB: the caller keeps at most
-//!   [`ProducerRing::capacity`] outstanding.
+//! - [`ProducerRing::enqueue`] never refuses a TRB, and [`ProducerRing::try_enqueue`] refuses at
+//!   [`ProducerRing::capacity`] only while the caller reports every completion through
+//!   [`ProducerRing::complete`]; the ring cannot see the controller's dequeue pointer.
 //! - The TRB builders do not check the 64 KiB rule (xHCI 1.2 section 6.4.1);
 //!   [`fits_one_transfer_request_block`] says whether a buffer crosses a boundary.
 

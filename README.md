@@ -32,6 +32,11 @@ assert_eq!((a.index, a.transfer_request_block.is_cycle(), a.link), (0, true, Non
 The caller writes each placed TRB (and the link, when `link` is `Some`) to DMA memory at
 `ring.entry_physical_address(index)`, then rings the doorbell.
 
+`examples/fake_controller.rs` runs a whole control transfer against a controller simulated in
+memory: the driver places it with `try_enqueue`, and the fake consumes the transfer ring and
+writes a Transfer Event. The driver then decodes the event and reports it with `complete`. Run it
+with `cargo run --example fake_controller`.
+
 ## What is proven
 
 Thirteen [Kani](https://github.com/model-checking/kani) harnesses, in `src/verification.rs`:
@@ -88,8 +93,9 @@ a barrier instruction (Linux spells them `wmb()` and `rmb()`).
 
 To produce a TRB on a command or transfer ring:
 
-1. Keep at most `ring.capacity()` TRBs outstanding: placed, with no completion event yet. The
-   ring does not know how far the controller has read, so it never refuses.
+1. Keep at most `ring.capacity()` TRBs outstanding: placed, with no completion event yet.
+   `ring.try_enqueue` counts them, and refuses at capacity, for a caller that reports each
+   completion event's TRB pointer to `ring.complete`. `ring.enqueue` never refuses.
 2. Call `ring.enqueue`, then write dwords 0 to 2 of the placed TRB at
    `ring.entry_physical_address(index)` with volatile writes.
 3. Issue a write barrier, then write dword 3, which holds the cycle bit. Until that bit matches,
@@ -167,8 +173,10 @@ the assertion that the patch breaks. `git checkout -- src` reverts the patch.
 - One page size: the DMA layout assumes 4 KiB pages (`PAGESIZE` bit 0).
 - No streams, isochronous or bulk transfers: the crate builds the TRBs a boot keyboard needs and
   nothing more.
-- A producer ring never refuses a TRB. The caller keeps at most `ProducerRing::capacity` TRBs
-  outstanding, or the next lap overwrites one the controller has not reached.
+- `ProducerRing::enqueue` never refuses a TRB, and `ProducerRing::try_enqueue` refuses at
+  `ProducerRing::capacity` only while the caller reports every completion through
+  `ProducerRing::complete`. Past capacity, the next lap overwrites a TRB the controller has not
+  reached.
 - The TRB builders do not check the 64 KiB rule: a data buffer must not cross a 64 KiB boundary
   (xHCI 1.2 section 6.4.1). `fits_one_transfer_request_block` says whether one does, and the
   caller chains several TRBs for a buffer that crosses one.
