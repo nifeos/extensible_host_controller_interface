@@ -1,5 +1,7 @@
-//! **The DMA region's layout**, in pages from its base, which the kernel allocates and confines and
-//! the driver lays its structures out in. Both ends read these constants; nothing else joins them.
+//! **One driver's DMA region layout**, in pages from its base: a single-slot boot-keyboard driver,
+//! whose kernel allocates and confines the region and whose driver lays its structures out in it.
+//! Nothing else in this crate reads these constants. A different driver lays out its own region,
+//! and needs none of this module.
 //!
 //! The pages through [`SCRATCHPAD_ARRAY`] are the driver's own and are mapped into it. The
 //! controller's scratchpad pages follow and are **not** mapped: the driver writes their physical addresses into

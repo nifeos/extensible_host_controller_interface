@@ -16,8 +16,8 @@ and does not need to say which.
 
 ## What the gates will ask of a change
 
-- The crate stays `no_std`-friendly, dual licensed `MIT OR Apache-2.0`, and free of vocabulary
-  from any other tree (the `standalone` job reads for it).
+- The crate stays `no_std`-friendly, dual licensed `MIT OR Apache-2.0`, and stands alone: the
+  `standalone` job refuses references to other repositories.
 - A proof harness carries a falsification patch, or a reason of at least 200 characters that it
   cannot.
 - A dependency new to the graph holds the pull request until a maintainer approves it, and so does a

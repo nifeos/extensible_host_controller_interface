@@ -62,23 +62,32 @@ pub const CONFIGURATION_REGISTER: u64 = 0x38;
 pub(crate) const FIRST_PORT_STATUS_AND_CONTROL_REGISTER: u64 = 0x400;
 
 /// `USBCMD` Run/Stop.
+#[doc(alias = "USBCMD.RS")]
 pub const COMMAND_RUN: u32 = 1 << 0;
 /// `USBCMD` Host Controller Reset.
+#[doc(alias = "USBCMD.HCRST")]
 pub const COMMAND_RESET: u32 = 1 << 1;
 /// `USBCMD` Interrupter Enable.
+#[doc(alias = "USBCMD.INTE")]
 pub const COMMAND_INTERRUPTS: u32 = 1 << 2;
 
 /// `USBSTS` `HCHalted`.
+#[doc(alias = "USBSTS.HCH")]
 pub const STATUS_HALTED: u32 = 1 << 0;
 /// `USBSTS` Host System Error.
+#[doc(alias = "USBSTS.HSE")]
 pub const STATUS_HOST_SYSTEM_ERROR: u32 = 1 << 2;
 /// `USBSTS` Event Interrupt, write one to clear.
+#[doc(alias = "USBSTS.EINT")]
 pub const STATUS_EVENT_INTERRUPT: u32 = 1 << 3;
 /// `USBSTS` Port Change Detect, write one to clear.
+#[doc(alias = "USBSTS.PCD")]
 pub const STATUS_PORT_CHANGE: u32 = 1 << 4;
 /// `USBSTS` Controller Not Ready.
+#[doc(alias = "USBSTS.CNR")]
 pub const STATUS_NOT_READY: u32 = 1 << 11;
 /// `USBSTS` Host Controller Error.
+#[doc(alias = "USBSTS.HCE")]
 pub const STATUS_CONTROLLER_ERROR: u32 = 1 << 12;
 
 /// Interrupter 0's register set, from [`RUNTIME_REGISTER_SPACE_OFFSET_REGISTER`]'s offset; its
@@ -120,11 +129,14 @@ pub const INTERRUPTER_MANAGEMENT_ENABLE: u32 = 1 << 1;
 pub const EVENT_RING_DEQUEUE_POINTER_BUSY: u64 = 1 << 3;
 
 /// `USBLEGSUP` Host Controller (HC) Basic Input/Output System (BIOS) Owned Semaphore.
+#[doc(alias = "USBLEGSUP.HC BIOS Owned Semaphore")]
 pub const LEGACY_BIOS_OWNED: u32 = 1 << 16;
 /// `USBLEGSUP` HC OS Owned Semaphore.
+#[doc(alias = "USBLEGSUP.HC OS Owned Semaphore")]
 pub const LEGACY_OPERATING_SYSTEM_OWNED: u32 = 1 << 24;
 /// `USBLEGCTLSTS`, the dword after `USBLEGSUP`: the system management interrupt (SMI) enables (bits 0, 4, 13, 14, 15) to clear,
 /// and the write-one-to-clear SMI events (29, 30, 31), so firmware stops being told about USB.
+#[doc(alias = "USBLEGCTLSTS")]
 pub const LEGACY_SYSTEM_MANAGEMENT_INTERRUPT_ENABLES: u32 = 1 | 1 << 4 | 0b111 << 13;
 
 /// The three SMI-enable bits share no bit (0, 4 and 13:15), which the compiler checks here; the

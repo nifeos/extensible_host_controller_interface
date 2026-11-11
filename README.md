@@ -3,7 +3,7 @@
 [![check](https://github.com/nifeos/extensible_host_controller_interface/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nifeos/extensible_host_controller_interface/actions/workflows/ci.yml?query=branch%3Amain)
 [![proofs](https://github.com/nifeos/extensible_host_controller_interface/actions/workflows/proofs.yml/badge.svg?branch=main)](https://github.com/nifeos/extensible_host_controller_interface/actions/workflows/proofs.yml?query=branch%3Amain)
 [![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](https://github.com/nifeos/extensible_host_controller_interface#license)
-[![minimum Rust version](https://img.shields.io/badge/rust-1.88%2B-blue.svg)](https://github.com/nifeos/extensible_host_controller_interface/blob/main/Cargo.toml)
+[![minimum Rust version](https://img.shields.io/badge/rust-1.85%2B-blue.svg)](https://github.com/nifeos/extensible_host_controller_interface/blob/main/Cargo.toml)
 
 Everything a Universal Serial Bus (USB) host controller (xHCI) driver computes, with nothing it
 touches. That covers register offsets and field decode, Transfer Request Block (TRB) construction
@@ -190,12 +190,12 @@ The reference is the xHCI 1.2 specification, chapters 4 to 7.
 
 ## Minimum Rust version
 
-1.88. To check it, install that toolchain and its bare-metal target, then test and build with it:
+1.85. To check it, install that toolchain and its bare-metal target, then test and build with it:
 
 ```sh
-rustup toolchain install 1.88 --profile minimal --target x86_64-unknown-none
-cargo +1.88 test
-cargo +1.88 build --lib --target x86_64-unknown-none
+rustup toolchain install 1.85 --profile minimal --target x86_64-unknown-none
+cargo +1.85 test
+cargo +1.85 build --lib --target x86_64-unknown-none
 ```
 
 ## License

@@ -66,6 +66,18 @@ pub use registers::Capabilities;
 /// The page size every layout here is in.
 pub const PAGE_BYTES: u64 = 4096;
 
+/// **How long to wait for [`registers::STATUS_HALTED`]** after clearing [`registers::COMMAND_RUN`]. The controller halts
+/// within 16 ms (xHCI 1.2 section 5.4.1, Table 5-20); this is Linux's `XHCI_MAX_HALT_USEC`, twice
+/// that.
+pub const HALT_TIMEOUT_MILLISECONDS: u64 = 32;
+/// **How long to wait for [`registers::COMMAND_RESET`] and then [`registers::STATUS_NOT_READY`] to clear** after a
+/// reset. The specification sets no bound; this is Linux's `XHCI_RESET_LONG_USEC`, the bound it
+/// uses when it first brings a controller up.
+pub const CONTROLLER_RESET_TIMEOUT_MILLISECONDS: u64 = 10_000;
+/// **How long to wait for a Command Completion Event** after ringing doorbell 0. This is Linux's
+/// `XHCI_CMD_DEFAULT_TIMEOUT`, which it takes from USB 3.2 section 9.2.6.1.
+pub const COMMAND_COMPLETION_TIMEOUT_MILLISECONDS: u64 = 5000;
+
 /// Transfer Request Block (TRB) type codes (xHCI 1.2 Table 6-91).
 pub mod transfer_request_block_type;
 

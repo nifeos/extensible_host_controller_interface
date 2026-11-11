@@ -212,7 +212,7 @@ fn the_interrupt_interval_is_the_exponent_the_specification_asks_for() {
         let microframes = (if b_interval == 0 { 1 } else { b_interval }) as u32 * 8;
         assert!((3..=10).contains(&interval));
         assert!(1u32 << interval <= microframes);
-        assert!(interval == 10 || interval == 3 || (1u32 << (interval + 1)) > microframes);
+        assert!((1u32 << (interval + 1)) > microframes);
     } else {
         assert!(interval <= 15);
         let wanted = if b_interval == 0 {

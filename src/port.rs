@@ -6,26 +6,37 @@
 //! back, plus the one the caller means.
 
 /// Current Connect Status: a device is attached.
+#[doc(alias = "PORTSC.CCS")]
 pub const CONNECTED: u32 = 1 << 0;
 /// Port Enabled. **Write one to clear, which disables the port.**
+#[doc(alias = "PORTSC.PED")]
 pub const ENABLED: u32 = 1 << 1;
 /// Port Reset: write one to reset the port, reads one until the reset finishes.
+#[doc(alias = "PORTSC.PR")]
 pub const RESET: u32 = 1 << 4;
 /// Port Power.
+#[doc(alias = "PORTSC.PP")]
 pub const POWER: u32 = 1 << 9;
 /// Connect Status Change, write one to clear.
+#[doc(alias = "PORTSC.CSC")]
 pub const CONNECT_CHANGE: u32 = 1 << 17;
 /// Port Enabled/Disabled Change, write one to clear.
+#[doc(alias = "PORTSC.PEC")]
 pub const ENABLE_CHANGE: u32 = 1 << 18;
 /// Warm Port Reset Change, write one to clear.
+#[doc(alias = "PORTSC.WRC")]
 pub const WARM_RESET_CHANGE: u32 = 1 << 19;
 /// Over-current Change, write one to clear.
+#[doc(alias = "PORTSC.OCC")]
 pub const OVER_CURRENT_CHANGE: u32 = 1 << 20;
 /// Port Reset Change, write one to clear.
+#[doc(alias = "PORTSC.PRC")]
 pub const RESET_CHANGE: u32 = 1 << 21;
 /// Port Link State Change, write one to clear.
+#[doc(alias = "PORTSC.PLC")]
 pub const LINK_CHANGE: u32 = 1 << 22;
 /// Port Config Error Change, write one to clear.
+#[doc(alias = "PORTSC.CEC")]
 pub const CONFIGURATION_ERROR_CHANGE: u32 = 1 << 23;
 
 /// Every change bit: what a driver writes back to acknowledge all of them.
@@ -144,6 +155,13 @@ pub const DEBOUNCE_STABLE_MILLISECONDS: u64 = 100;
 pub const DEBOUNCE_STEP_MILLISECONDS: u64 = 25;
 /// Linux's `HUB_DEBOUNCE_TIMEOUT`.
 pub const DEBOUNCE_TIMEOUT_MILLISECONDS: u64 = 2000;
+
+/// **How long to wait after setting [`POWER`]** before changing the port's state, on a controller
+/// with Port Power Control (xHCI 1.2 section 5.4.8).
+pub const POWER_ON_WAIT_MILLISECONDS: u64 = 20;
+/// **How long to wait for [`RESET_CHANGE`]** after setting [`RESET`]. This is Linux's
+/// `HUB_RESET_TIMEOUT`.
+pub const RESET_TIMEOUT_MILLISECONDS: u64 = 800;
 
 /// **What [`PortDebounce::sample`] says**, after each read of the ports.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -303,11 +321,11 @@ mod tests {
         (t, DebounceVerdict::Pending, at(t))
     }
 
-    /// **xenon's ports after the reset**, from the `PORTSC` probe on 2026-10-21 (UTC): nothing at
-    /// first, ports 4 and 9 back about 10 ms later, port 1 a millisecond after them. The scan the
-    /// boot line counts read none of them; a settled scan reads all three.
+    /// **Ports that come back one after another after a controller reset**, as a real controller's
+    /// did: nothing at first, ports 4 and 9 about 10 ms later, port 1 a millisecond after them. A
+    /// scan at once reads none of them; a settled scan reads all three.
     #[test]
-    fn xenons_ports_are_all_counted_once_they_settle() {
+    fn ports_that_return_late_are_all_counted_once_they_settle() {
         let (t, settled, seen) = settle(&[(0, &[]), (10, &[4, 9]), (11, &[1, 4, 9])]);
         assert_eq!(settled, DebounceVerdict::Settled);
         assert_eq!(seen, ports(&[1, 4, 9]));
@@ -344,7 +362,7 @@ mod tests {
         let end = loop {
             assert!(t < DEBOUNCE_TIMEOUT_MILLISECONDS, "the wait never ended");
             t += DEBOUNCE_STEP_MILLISECONDS;
-            let bouncing = if (t / DEBOUNCE_STEP_MILLISECONDS).is_multiple_of(2) {
+            let bouncing = if (t / DEBOUNCE_STEP_MILLISECONDS) % 2 == 0 {
                 ports(&[3])
             } else {
                 ports(&[])
