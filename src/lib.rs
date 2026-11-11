@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(unsafe_code)]
 //! **The extensible host controller interface (xHCI), as pure logic**: everything a USB host
 //! controller driver computes, with nothing it touches. A kernel finds and confines the register
 //! file and direct memory access (DMA) memory and a user-space driver drives them; this is the
