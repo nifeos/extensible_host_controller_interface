@@ -78,6 +78,10 @@ pub const fn slot_device_number(context: &[u32; 8]) -> u8 {
 /// 0 (`ProducerRing::dequeue_pointer`). `interval` is already the xHCI exponent
 /// (`crate::interrupt_interval`). Three retries on error, which is the specification's suggested
 /// value for everything but isochronous.
+///
+/// `kind` is the Endpoint Type code (xHCI 1.2 Table 6-9, [`CONTROL`] and [`INTERRUPT_IN`] among
+/// them). The context keeps only its three bits, so a code above 7 never spills into the reserved
+/// bit, Host Initiate Disable or Max Burst Size beside it.
 pub const fn endpoint(
     kind: u8,
     maximum_packet: u16,
@@ -94,7 +98,7 @@ pub const fn endpoint(
     };
     [
         (interval as u32) << 16,
-        3 << 1 | (kind as u32) << 3 | (maximum_packet as u32) << 16,
+        3 << 1 | (kind as u32 & 0x7) << 3 | (maximum_packet as u32) << 16,
         dequeue as u32,
         (dequeue >> 32) as u32,
         average_transfer_request_block_bytes as u32 | maximum_service_interval_payload << 16,
@@ -104,14 +108,15 @@ pub const fn endpoint(
     ]
 }
 
-/// The endpoint context's fields share no bit: dword 1's type at 1:2, kind at 3:10 and packet
-/// size at 16:31, and dword 4's two `u16` halves, which the compiler checks here; the mutation
-/// exclusion for [`endpoint`] names this constant. The constant-assertion lint is off on
-/// purpose: the assertion is constant by construction, and the compiler checking it is its job.
+/// The endpoint context's fields share no bit: dword 1's error count at 1:2, endpoint type at
+/// 3:5 and packet size at 16:31, and dword 4's two `u16` halves, which the compiler checks here;
+/// the mutation exclusion for [`endpoint`] names this constant. The constant-assertion lint is
+/// off on purpose: the assertion is constant by construction, and the compiler checking it is
+/// its job.
 #[allow(clippy::assertions_on_constants, clippy::eq_op)]
 pub const ENDPOINT_CONTEXT_FIELDS_DO_NOT_OVERLAP: () = assert!(
-    ((3u32 << 1) & (0xff << 3)) == 0
-        && ((0xffu32 << 3) & (0xffff << 16)) == 0
+    ((3u32 << 1) & (0x7 << 3)) == 0
+        && ((0x7u32 << 3) & (0xffff << 16)) == 0
         && ((0xffffu32 << 16) & 0xffff) == 0
 );
 

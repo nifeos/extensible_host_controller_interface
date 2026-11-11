@@ -16,6 +16,10 @@
 //! - One page size: [`direct_memory_access`] assumes 4 KiB (`PAGESIZE` bit 0), and the driver refuses otherwise.
 //! - No streams, isochronous or bulk: the TRBs a keyboard needs and nothing more.
 //! - Hubs are not modeled (route string 0), so a device behind a hub cannot be addressed.
+//! - A [`ProducerRing`] never refuses a TRB: the caller keeps at most
+//!   [`ProducerRing::capacity`] outstanding.
+//! - The TRB builders do not check the 64 KiB rule (xHCI 1.2 section 6.4.1);
+//!   [`fits_one_transfer_request_block`] says whether a buffer crosses a boundary.
 
 #[cfg(doctest)]
 #[doc = include_str!("../README.md")]
@@ -48,7 +52,7 @@ mod transfer_request_block;
 pub use context::interrupt_interval;
 pub use event::Event;
 pub use ring::{EventRing, ProducerRing, TransferRequestBlockPlacement};
-pub use transfer_request_block::TransferRequestBlock;
+pub use transfer_request_block::{TransferRequestBlock, fits_one_transfer_request_block};
 
 #[cfg(kani)]
 mod verification;

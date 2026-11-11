@@ -34,7 +34,7 @@ The caller writes each placed TRB (and the link, when `link` is `Some`) to DMA m
 
 ## What is proven
 
-Seven [Kani](https://github.com/model-checking/kani) harnesses, in `src/verification.rs`:
+Eight [Kani](https://github.com/model-checking/kani) harnesses, in `src/verification.rs`:
 
 - `a_producer_ring_stays_in_bounds`: from every reachable state, a producer ring never places a TRB
   on its link slot or past its end, and places the link exactly on the last slot.
@@ -50,9 +50,12 @@ Seven [Kani](https://github.com/model-checking/kani) harnesses, in `src/verifica
   context index is from 1 to 31, endpoint 0 is index 1 in both directions, two different endpoints
   never share an index. The offsets of every index lie inside a 32- or 64-byte-per-context
   device or input context.
-- `the_slot_and_endpoint_contexts_keep_each_field_in_its_own_bits`: for every input, a slot context
-  and an endpoint context read back each field from exactly the bits the specification gives it,
-  the dequeue pointer reassembles from its two dwords, and the reserved dwords stay zero.
+- `a_slot_context_keeps_each_field_in_its_own_bits`: for every input, a slot context reads back
+  each field from exactly the bits the specification gives it, and the reserved dwords stay zero.
+- `an_endpoint_context_keeps_each_field_in_its_own_bits`: for every input, an endpoint context
+  reads back each field from exactly the bits the specification gives it. The endpoint type stays
+  in its three bits, the dequeue pointer reassembles from its two dwords, and the reserved bits
+  and dwords stay zero.
 - `a_port_write_never_acknowledges_what_nobody_asked_to`: for any port status register value,
   `write_value` writes the preserved bits plus exactly the bits asked for, so writing nothing writes
   no change bit, no Port Enabled bit and no reset. The speed id is the four bits it comes from.
@@ -64,6 +67,32 @@ Seven [Kani](https://github.com/model-checking/kani) harnesses, in `src/verifica
 Install Kani and run them as "Building and testing" below describes.
 
 Not yet proven: event decoding.
+
+## What the caller does
+
+The crate computes; the caller performs every access, in this order. On x86_64 a compiler fence
+is enough for each barrier below. On aarch64 and riscv64, which order memory weakly, each one is
+a barrier instruction (Linux spells them `wmb()` and `rmb()`).
+
+To produce a TRB on a command or transfer ring:
+
+1. Keep at most `ring.capacity()` TRBs outstanding: placed, with no completion event yet. The
+   ring does not know how far the controller has read, so it never refuses.
+2. Call `ring.enqueue`, then write dwords 0 to 2 of the placed TRB at
+   `ring.entry_physical_address(index)` with volatile writes.
+3. Issue a write barrier, then write dword 3, which holds the cycle bit. Until that bit matches,
+   the controller treats the TRB as not yet produced (xHCI 1.2 section 4.9.2).
+4. When `link` is `Some`, write the link TRB at its index the same way.
+5. Issue a write barrier, then write the doorbell register.
+
+To consume an event:
+
+1. Read dword 3 of the entry at `event_ring.index()` with a volatile read. The controller writes
+   that dword last (xHCI 1.2 section 4.11.3).
+2. When `event_ring.is_ready` says no, stop. Otherwise issue a read barrier, then read dwords 0 to
+   2, and decode the four with `Event::decode`.
+3. Call `event_ring.advance()`, and after the events of this pass, write
+   `event_ring.dequeue_pointer()` to the interrupter's `ERDP` register (xHCI 1.2 section 4.9.4).
 
 ## Building and testing
 
@@ -84,7 +113,7 @@ kani-verifier --version 0.68.0`, then `cargo kani setup`. The setup step downloa
 checker, so it needs network access. CI uses version 0.68.0, and another version may verify
 differently.
 
-Then `cargo kani`, from the crate's directory, runs all seven harnesses. On an x86_64 Linux
+Then `cargo kani`, from the crate's directory, runs all eight harnesses. On an x86_64 Linux
 desktop that takes about 1.5 to 2 minutes and peaks near 0.8 gigabytes of memory.
 `the_capability_walk_ends_and_stays_inside_the_limit` takes about three quarters of that time. CI
 runs plain `cargo kani`, with no extra flags. To run one harness, give its full path and `--exact`:
@@ -105,7 +134,7 @@ A passing run prints several lines that look alarming. All of them are expected:
 - Source paths under `/home/runner/.rustup`, a directory that does not exist on your machine. They
   come from the toolchain Kani ships.
 
-Trust the last line of the run: `Complete - 7 successfully verified harnesses, 0 failures, 7 total.`
+Trust the last line of the run: `Complete - 8 successfully verified harnesses, 0 failures, 8 total.`
 
 ### Running one falsification patch
 
@@ -126,6 +155,11 @@ the assertion that the patch breaks. `git checkout -- src` reverts the patch.
 - One page size: the DMA layout assumes 4 KiB pages (`PAGESIZE` bit 0).
 - No streams, isochronous or bulk transfers: the crate builds the TRBs a boot keyboard needs and
   nothing more.
+- A producer ring never refuses a TRB. The caller keeps at most `ProducerRing::capacity` TRBs
+  outstanding, or the next lap overwrites one the controller has not reached.
+- The TRB builders do not check the 64 KiB rule: a data buffer must not cross a 64 KiB boundary
+  (xHCI 1.2 section 6.4.1). `fits_one_transfer_request_block` says whether one does, and the
+  caller chains several TRBs for a buffer that crosses one.
 
 The reference is the xHCI 1.2 specification, chapters 4 to 7.
 

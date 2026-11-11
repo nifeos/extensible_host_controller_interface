@@ -122,9 +122,9 @@ fn a_simulated_controller_runs_exactly_what_was_produced_across_laps() {
         ran
     };
     let mut next = 1u32;
-    // Never more than the ring's three usable entries between two runs: a fourth would overwrite
-    // a TRB the controller has not reached, which is the producer's rule, not the ring's.
-    for burst in [2u32, 3, 1, 3, 2, 3] {
+    // Never more than the ring's capacity between two runs, which is the producer's rule, not
+    // the ring's: one of the three usable entries stays empty, so a full ring never looks empty.
+    for burst in [2u32, 1, 2, 2, 1, 2, 2] {
         let mut produced = std::vec::Vec::new();
         for _ in 0..burst {
             let p = ring.enqueue(TransferRequestBlock::normal(u64::from(next), 8));
@@ -261,4 +261,41 @@ fn a_producer_ring_of_two_links_every_time() {
     assert_eq!(link.kind(), transfer_request_block_type::LINK);
     assert_eq!(link.0[0], 0x9000);
     assert_eq!(ring.dequeue_pointer(), 0x9000); // back at 0, cycle now 0
+}
+
+/// **A producer ring holds two fewer TRBs than its entries**: one entry is the link, and one stays
+/// empty so that a full ring and an empty one never share an enqueue position (xHCI 1.2 section
+/// 4.9.2.2).
+#[test]
+fn a_producer_ring_holds_two_fewer_than_its_entries() {
+    assert_eq!(ProducerRing::new(0x1000, 2).capacity(), 0);
+    assert_eq!(ProducerRing::new(0x1000, 4).capacity(), 2);
+    assert_eq!(ProducerRing::new(0x1000, 256).capacity(), 254);
+}
+
+/// **A buffer fits one transfer TRB exactly when it stays inside one 64 KiB block**, ending at the
+/// boundary included (xHCI 1.2 section 6.4.1).
+#[test]
+fn a_buffer_fits_one_transfer_request_block_until_it_crosses_64_kibibytes() {
+    assert!(fits_one_transfer_request_block(0x1_0000, u16::MAX));
+    assert!(fits_one_transfer_request_block(0x1_0001, u16::MAX));
+    assert!(!fits_one_transfer_request_block(0x1_0002, u16::MAX));
+    assert!(fits_one_transfer_request_block(0x1_fff8, 8));
+    assert!(!fits_one_transfer_request_block(0x1_fff8, 9));
+    assert!(fits_one_transfer_request_block(0x1_ffff, 0));
+    assert!(fits_one_transfer_request_block(u64::MAX, 1));
+    assert!(!fits_one_transfer_request_block(u64::MAX, 2));
+}
+
+/// **An endpoint type code above 7 stays in its three bits** (xHCI 1.2 Table 6-9): bit 6, Host
+/// Initiate Disable and Max Burst Size read zero.
+#[test]
+fn an_endpoint_type_above_seven_stays_in_its_field() {
+    let endpoint = context::endpoint(0xff, 8, 0, 0x1000, 8);
+    assert_eq!((endpoint[1] >> 3) & 0x7, 7);
+    assert_eq!((endpoint[1] >> 6) & 0x3ff, 0);
+    assert_eq!(
+        context::endpoint(context::INTERRUPT_IN, 8, 0, 0, 8)[1] >> 3 & 0x7,
+        7
+    );
 }
