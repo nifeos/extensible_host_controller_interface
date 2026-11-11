@@ -7,7 +7,10 @@ use super::*;
 pub enum Event {
     /// A transfer finished (or failed).
     Transfer {
-        /// The physical address of the TRB it was about.
+        /// The physical address of the TRB it was about. That holds only while the driver issues
+        /// no Event Data TRBs: for one of those the controller sets the Event Data bit (bit 2 of
+        /// the last dword, xHCI 1.2 section 6.4.2.1) and puts the Event Data TRB's value here
+        /// instead, and this decoder does not read that bit. The crate builds no Event Data TRB.
         transfer_request_block: u64,
         /// Bytes *not* transferred: zero for a full buffer, positive for a short packet.
         residual: u32,

@@ -145,6 +145,20 @@ pub const DEBOUNCE_STEP_MILLISECONDS: u64 = 25;
 /// Linux's `HUB_DEBOUNCE_TIMEOUT`.
 pub const DEBOUNCE_TIMEOUT_MILLISECONDS: u64 = 2000;
 
+/// **What [`PortDebounce::sample`] says**, after each read of the ports.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DebounceVerdict {
+    /// Keep reading: the ports have changed within [`DEBOUNCE_STABLE_MILLISECONDS`], and the wait
+    /// has not reached [`DEBOUNCE_TIMEOUT_MILLISECONDS`].
+    Pending,
+    /// Nothing has changed for [`DEBOUNCE_STABLE_MILLISECONDS`]: the connections read are the
+    /// ports' own.
+    Settled,
+    /// The wait reached [`DEBOUNCE_TIMEOUT_MILLISECONDS`] with the ports still changing, so the
+    /// connections read are not a fact.
+    TimedOut,
+}
+
 impl PortDebounce {
     /// Start at `now_milliseconds`, when the ports were powered, having read `first`.
     pub const fn new(now_milliseconds: u64, first: Connections) -> PortDebounce {
@@ -155,9 +169,8 @@ impl PortDebounce {
         }
     }
 
-    /// The ports read `seen` at `now_milliseconds`: `None` to keep reading, `Some(true)` once nothing has
-    /// changed for [`DEBOUNCE_STABLE_MILLISECONDS`], `Some(false)` at [`DEBOUNCE_TIMEOUT_MILLISECONDS`].
-    pub fn sample(&mut self, now_milliseconds: u64, seen: Connections) -> Option<bool> {
+    /// The ports read `seen` at `now_milliseconds`: what to do next, as a [`DebounceVerdict`].
+    pub fn sample(&mut self, now_milliseconds: u64, seen: Connections) -> DebounceVerdict {
         if seen != self.last {
             self.last = seen;
             self.changed_milliseconds = now_milliseconds;
@@ -165,13 +178,13 @@ impl PortDebounce {
         if now_milliseconds.saturating_sub(self.changed_milliseconds)
             >= DEBOUNCE_STABLE_MILLISECONDS
         {
-            Some(true)
+            DebounceVerdict::Settled
         } else if now_milliseconds.saturating_sub(self.start_milliseconds)
             >= DEBOUNCE_TIMEOUT_MILLISECONDS
         {
-            Some(false)
+            DebounceVerdict::TimedOut
         } else {
-            None
+            DebounceVerdict::Pending
         }
     }
 }
@@ -266,7 +279,7 @@ mod tests {
 
     /// Run a settle over `timeline` (milliseconds after power, the ports connected from then on),
     /// reading every step as the driver does: when it stops, and what it last read.
-    fn settle(timeline: &[(u64, &[u8])]) -> (u64, Option<bool>, Connections) {
+    fn settle(timeline: &[(u64, &[u8])]) -> (u64, DebounceVerdict, Connections) {
         let at = |t: u64| {
             ports(
                 timeline
@@ -282,11 +295,12 @@ mod tests {
         // Bounded, so a broken `sample` fails here rather than hanging the test run.
         while t < DEBOUNCE_TIMEOUT_MILLISECONDS {
             t += DEBOUNCE_STEP_MILLISECONDS;
-            if let Some(settled) = s.sample(t, at(t)) {
-                return (t, Some(settled), at(t));
+            let verdict = s.sample(t, at(t));
+            if verdict != DebounceVerdict::Pending {
+                return (t, verdict, at(t));
             }
         }
-        (t, None, at(t))
+        (t, DebounceVerdict::Pending, at(t))
     }
 
     /// **xenon's ports after the reset**, from the `PORTSC` probe on 2026-10-21 (UTC): nothing at
@@ -295,7 +309,7 @@ mod tests {
     #[test]
     fn xenons_ports_are_all_counted_once_they_settle() {
         let (t, settled, seen) = settle(&[(0, &[]), (10, &[4, 9]), (11, &[1, 4, 9])]);
-        assert_eq!(settled, Some(true));
+        assert_eq!(settled, DebounceVerdict::Settled);
         assert_eq!(seen, ports(&[1, 4, 9]));
         assert_eq!(t, 125);
     }
@@ -306,7 +320,7 @@ mod tests {
     #[test]
     fn a_bouncing_connect_is_believed_after_its_last_bounce_holds() {
         let (t, settled, seen) = settle(&[(0, &[3]), (30, &[]), (60, &[3])]);
-        assert_eq!(settled, Some(true));
+        assert_eq!(settled, DebounceVerdict::Settled);
         assert_eq!(seen, ports(&[3]));
         assert_eq!(t, 175);
     }
@@ -315,10 +329,13 @@ mod tests {
     /// still waits the power-on floor rather than reading at once.
     #[test]
     fn a_port_connected_from_the_start_is_believed_after_the_floor() {
-        assert_eq!(settle(&[(0, &[5])]), (100, Some(true), ports(&[5])));
+        assert_eq!(
+            settle(&[(0, &[5])]),
+            (100, DebounceVerdict::Settled, ports(&[5]))
+        );
     }
 
-    /// A port that keeps changing never settles, and the wait ends at the timeout with `false`, so
+    /// A port that keeps changing never settles, and the wait ends at the timeout, so
     /// the boot line can say its count is not a fact.
     #[test]
     fn a_port_that_never_holds_still_ends_at_the_timeout() {
@@ -332,11 +349,12 @@ mod tests {
             } else {
                 ports(&[])
             };
-            if let Some(settled) = s.sample(t, bouncing) {
-                break settled;
+            let verdict = s.sample(t, bouncing);
+            if verdict != DebounceVerdict::Pending {
+                break verdict;
             }
         };
-        assert!(!end);
+        assert_eq!(end, DebounceVerdict::TimedOut);
         assert_eq!(t, DEBOUNCE_TIMEOUT_MILLISECONDS);
     }
 }

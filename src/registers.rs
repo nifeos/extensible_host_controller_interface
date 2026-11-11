@@ -203,13 +203,19 @@ impl Capabilities {
         }
     }
 
-    /// Port `port_number`'s **Port Status and Control** register (`PORTSC`, xHCI specification),
-    /// `port_number` from 1, as an offset into the register file.
+    /// Port `port_number`'s **Port Status and Control** register (`PORTSC`, xHCI 1.2 section
+    /// 5.4.8), as an offset into the register file. Ports count from 1, so `None` for port 0 and
+    /// for a port past [`maximum_ports`](Self::maximum_ports): no such register exists.
     #[doc(alias = "PORTSC")]
-    pub const fn port_status_and_control(&self, port_number: u8) -> u64 {
-        self.operational
-            + FIRST_PORT_STATUS_AND_CONTROL_REGISTER
-            + 0x10 * (port_number as u64).saturating_sub(1)
+    pub const fn port_status_and_control(&self, port_number: u8) -> Option<u64> {
+        if port_number == 0 || port_number > self.maximum_ports {
+            return None;
+        }
+        Some(
+            self.operational
+                + FIRST_PORT_STATUS_AND_CONTROL_REGISTER
+                + 0x10 * (port_number as u64 - 1),
+        )
     }
 
     /// Interrupter 0's register at `register_offset` ([`INTERRUPTER_MANAGEMENT_REGISTER`],
@@ -271,8 +277,10 @@ mod tests {
         assert_eq!(capabilities.scratchpads, 0);
         assert_eq!(capabilities.context_bytes, 32);
         assert_eq!(capabilities.extended, 0x20); // the dword count in HCCPARAMS1's high half, times four
-        assert_eq!(capabilities.port_status_and_control(1), 0x440);
-        assert_eq!(capabilities.port_status_and_control(8), 0x4b0);
+        assert_eq!(capabilities.port_status_and_control(1), Some(0x440));
+        assert_eq!(capabilities.port_status_and_control(8), Some(0x4b0));
+        assert_eq!(capabilities.port_status_and_control(0), None);
+        assert_eq!(capabilities.port_status_and_control(9), None);
         assert_eq!(
             capabilities.interrupter(EVENT_RING_DEQUEUE_POINTER_REGISTER),
             0x1038
