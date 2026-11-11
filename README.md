@@ -178,8 +178,10 @@ the assertion that the patch breaks. `git checkout -- src` reverts the patch.
   Speed ID dwords.
 - No streams, isochronous or bulk transfers: the crate builds the TRBs a boot keyboard needs and
   nothing more.
-- A producer ring never refuses a TRB. The caller keeps at most `ProducerRing::capacity` TRBs
-  outstanding, or the next lap overwrites one the controller has not reached.
+- `ProducerRing::enqueue` never refuses a TRB, and `ProducerRing::try_enqueue` refuses at
+  `ProducerRing::capacity` only while the caller reports every completion through
+  `ProducerRing::complete`. Past capacity, the next lap overwrites a TRB the controller has not
+  reached.
 - The TRB builders do not check the 64 KiB rule: a data buffer must not cross a 64 KiB boundary
   (xHCI 1.2 section 6.4.1). `fits_one_transfer_request_block` says whether one does, and the
   caller chains several TRBs for a buffer that crosses one.
