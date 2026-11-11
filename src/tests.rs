@@ -299,3 +299,15 @@ fn an_endpoint_type_above_seven_stays_in_its_field() {
         7
     );
 }
+
+/// **A device context index above 31 stays in the five-bit Endpoint ID** of Reset Endpoint and
+/// Set TR Dequeue Pointer (xHCI 1.2 sections 6.4.3.7 and 6.4.3.9): bits 21 to 23 read zero.
+#[test]
+fn an_endpoint_index_above_thirty_one_stays_in_its_field() {
+    for built in [
+        TransferRequestBlock::reset_endpoint(1, 0xff),
+        TransferRequestBlock::set_dequeue(0x1000, 1, 0xff),
+    ] {
+        assert_eq!(built.0[3] >> 16 & 0xff, 0x1f);
+    }
+}

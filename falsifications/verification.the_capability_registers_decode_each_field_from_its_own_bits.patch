@@ -1,0 +1,18 @@
+Falsifies `extensible_host_controller_interface::verification::the_capability_registers_decode_each_field_from_its_own_bits`.
+
+The defect: `Capabilities::decode` reads `MaxIntrs` as twelve bits, so the reserved bit 19 of `HCSPARAMS1` leaks into the interrupter count.
+
+Expected to fail: the harness's check that the interrupter count is the eleven bits at 8 to 18.
+
+diff --git a/src/registers.rs b/src/registers.rs
+--- a/src/registers.rs
++++ b/src/registers.rs
+@@ -188,7 +188,7 @@
+             operational: (capability_registers_length & 0xff) as u64,
+             version: (capability_registers_length >> 16) as u16,
+             maximum_slots: structural_parameters_1 as u8,
+-            maximum_interrupters: ((structural_parameters_1 >> 8) & 0x7ff) as u16,
++            maximum_interrupters: ((structural_parameters_1 >> 8) & 0xfff) as u16,
+             maximum_ports: (structural_parameters_1 >> 24) as u8,
+             scratchpads: (((structural_parameters_2 >> 21) & 0x1f) << 5
+                 | (structural_parameters_2 >> 27)) as u16,

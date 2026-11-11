@@ -1,0 +1,18 @@
+Falsifies `extensible_host_controller_interface::verification::the_port_debounce_answers_by_its_timeout`.
+
+The defect: `PortDebounce::sample` gives up only after the timeout has passed, so a sample at exactly the timeout still says keep reading.
+
+Expected to fail: the harness's check that a sample at or past the timeout is never `None`.
+
+diff --git a/src/port.rs b/src/port.rs
+--- a/src/port.rs
++++ b/src/port.rs
+@@ -167,7 +167,7 @@
+         {
+             Some(true)
+         } else if now_milliseconds.saturating_sub(self.start_milliseconds)
+-            >= DEBOUNCE_TIMEOUT_MILLISECONDS
++            > DEBOUNCE_TIMEOUT_MILLISECONDS
+         {
+             Some(false)
+         } else {

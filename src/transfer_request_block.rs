@@ -144,21 +144,23 @@ impl TransferRequestBlock {
         )
     }
 
-    /// Reset Endpoint `device_context_index` of `slot`, after a stall halted it.
+    /// Reset Endpoint `device_context_index` of `slot`, after a stall halted it. The index keeps
+    /// to the five bits of the Endpoint ID field (xHCI 1.2 section 6.4.3.7).
     pub const fn reset_endpoint(slot: u8, device_context_index: u8) -> TransferRequestBlock {
         TransferRequestBlock([
             0,
             0,
             0,
             control(transfer_request_block_type::RESET_ENDPOINT)
-                | (device_context_index as u32) << 16
+                | (device_context_index as u32 & 0x1f) << 16
                 | (slot as u32) << 24,
         ])
     }
 
     /// Set TR Dequeue Pointer of endpoint `device_context_index` of `slot` to `pointer` (the ring
     /// position with the consumer cycle in bit 0, [`ProducerRing::dequeue_pointer`]), skipping
-    /// what a stall left on the ring.
+    /// what a stall left on the ring. The index keeps to the five bits of the Endpoint ID field
+    /// (xHCI 1.2 section 6.4.3.9).
     pub const fn set_dequeue(
         pointer: u64,
         slot: u8,
@@ -169,7 +171,7 @@ impl TransferRequestBlock {
             [
                 0,
                 control(transfer_request_block_type::SET_TRANSFER_RING_DEQUEUE_POINTER)
-                    | (device_context_index as u32) << 16
+                    | (device_context_index as u32 & 0x1f) << 16
                     | (slot as u32) << 24,
             ],
         )

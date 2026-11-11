@@ -1,0 +1,18 @@
+Falsifies `extensible_host_controller_interface::verification::every_command_trb_puts_its_slot_endpoint_and_pointer_in_their_fields`.
+
+The defect: `reset_endpoint` forgets to mask the device context index to the five-bit Endpoint ID, so an index above 31 spills into the reserved bits 21 to 23.
+
+Expected to fail: the harness's check that the Reset Endpoint TRB's dword 3 holds nothing outside its type, slot and endpoint fields.
+
+diff --git a/src/transfer_request_block.rs b/src/transfer_request_block.rs
+--- a/src/transfer_request_block.rs
++++ b/src/transfer_request_block.rs
+@@ -152,7 +152,7 @@
+             0,
+             0,
+             control(transfer_request_block_type::RESET_ENDPOINT)
+-                | (device_context_index as u32 & 0x1f) << 16
++                | (device_context_index as u32) << 16
+                 | (slot as u32) << 24,
+         ])
+     }
