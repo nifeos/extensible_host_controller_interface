@@ -249,7 +249,11 @@ impl EventRing {
         }
     }
 
-    /// The physical address to write to `ERDP`: where the next event will be.
+    /// The physical address to write to `ERDP`: where the next event will be. Write it with
+    /// [`EVENT_RING_DEQUEUE_POINTER_BUSY`](crate::registers::EVENT_RING_DEQUEUE_POINTER_BUSY) set,
+    /// `dequeue_pointer() | EVENT_RING_DEQUEUE_POINTER_BUSY`: the bit is write-one-to-clear, and a
+    /// write without it leaves Event Handler Busy set, so the interrupter raises no further
+    /// interrupt (xHCI 1.2 section 5.5.2.3.3 and section 4.17.2).
     pub const fn dequeue_pointer(&self) -> u64 {
         self.base + self.dequeue as u64 * 16
     }

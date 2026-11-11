@@ -6,22 +6,22 @@
 # The Kani proofs in src/verification.rs are excluded in .cargo/mutants.toml, which says why.
 
 # Equivalent: `1 << 0` is 1, and so is `1 >> 0`.
-src/port.rs:9 # CONNECTED is `1 << 0`, and `1 >> 0` is the same 1
-src/registers.rs:65 # COMMAND_RUN is `1 << 0`, and `1 >> 0` is the same 1
-src/registers.rs:72 # STATUS_HALTED is `1 << 0`, and `1 >> 0` is the same 1
-src/registers.rs:111 # INTERRUPTER_MANAGEMENT_PENDING is `1 << 0`, and `1 >> 0` is the same 1
+src/port.rs:10 # CONNECTED is `1 << 0`, and `1 >> 0` is the same 1
+src/registers.rs:66 # COMMAND_RUN is `1 << 0`, and `1 >> 0` is the same 1
+src/registers.rs:76 # STATUS_HALTED is `1 << 0`, and `1 >> 0` is the same 1
+src/registers.rs:120 # INTERRUPTER_MANAGEMENT_PENDING is `1 << 0`, and `1 >> 0` is the same 1
 
 # Equivalent: `|` and `^` agree when the two sides share no bit. Each line's fields are checked
 # disjoint at compile time by the constant its reason names.
-src/port.rs:33 # the seven change bits share no bit, so `^` is `|` (PORT_CHANGE_BITS_DO_NOT_OVERLAP)
-src/port.rs:34 # the seven change bits share no bit, so `^` is `|` (PORT_CHANGE_BITS_DO_NOT_OVERLAP)
-src/port.rs:35 # the seven change bits share no bit, so `^` is `|` (PORT_CHANGE_BITS_DO_NOT_OVERLAP)
-src/port.rs:36 # the seven change bits share no bit, so `^` is `|` (PORT_CHANGE_BITS_DO_NOT_OVERLAP)
-src/port.rs:37 # the seven change bits share no bit, so `^` is `|` (PORT_CHANGE_BITS_DO_NOT_OVERLAP)
-src/port.rs:38 # the seven change bits share no bit, so `^` is `|` (PORT_CHANGE_BITS_DO_NOT_OVERLAP)
-src/port.rs:60 # the eight preserved fields share no bit, so `^` is `|` (PRESERVED_FIELDS_DO_NOT_OVERLAP)
-src/registers.rs:128 # the three SMI-enable fields at 0, 4 and 13:15 share no bit, so `^` is `|` (LEGACY_ENABLE_BITS_DO_NOT_OVERLAP)
-src/registers.rs:194 # the scratchpad count's high field at 5:9 and low field at 0:4 share no bit, so `^` is `|` (SCRATCHPAD_FIELDS_DO_NOT_OVERLAP)
+src/port.rs:44 # the seven change bits share no bit, so `^` is `|` (PORT_CHANGE_BITS_DO_NOT_OVERLAP)
+src/port.rs:45 # the seven change bits share no bit, so `^` is `|` (PORT_CHANGE_BITS_DO_NOT_OVERLAP)
+src/port.rs:46 # the seven change bits share no bit, so `^` is `|` (PORT_CHANGE_BITS_DO_NOT_OVERLAP)
+src/port.rs:47 # the seven change bits share no bit, so `^` is `|` (PORT_CHANGE_BITS_DO_NOT_OVERLAP)
+src/port.rs:48 # the seven change bits share no bit, so `^` is `|` (PORT_CHANGE_BITS_DO_NOT_OVERLAP)
+src/port.rs:49 # the seven change bits share no bit, so `^` is `|` (PORT_CHANGE_BITS_DO_NOT_OVERLAP)
+src/port.rs:71 # the eight preserved fields share no bit, so `^` is `|` (PRESERVED_FIELDS_DO_NOT_OVERLAP)
+src/registers.rs:140 # the three SMI-enable fields at 0, 4 and 13:15 share no bit, so `^` is `|` (LEGACY_ENABLE_BITS_DO_NOT_OVERLAP)
+src/registers.rs:206 # the scratchpad count's high field at 5:9 and low field at 0:4 share no bit, so `^` is `|` (SCRATCHPAD_FIELDS_DO_NOT_OVERLAP)
 src/context.rs:71 # the slot context's speed at 20:23 and entries at 27:31 share no bit, so `^` is `|` (SLOT_CONTEXT_FIELDS_DO_NOT_OVERLAP)
 src/context.rs:120 # the error count at 1:2, the endpoint type at 3:5 and packet size at 16:31 share no bit, so `^` is `|` (ENDPOINT_CONTEXT_FIELDS_DO_NOT_OVERLAP)
 src/context.rs:123 # the two u16 halves of the endpoint context's dword 4 share no bit, so `^` is `|` (ENDPOINT_CONTEXT_FIELDS_DO_NOT_OVERLAP)
@@ -45,7 +45,5 @@ src/transfer_request_block.rs:247 # the type at 10:15 and the completion and sho
 src/transfer_request_block.rs:248 # the type at 10:15 and the completion and short-packet flags at 5 and 2 share no bit, so `^` is `|` (TRANSFER_CONTROL_FIELDS_DO_NOT_OVERLAP)
 src/ring.rs:105 # a TRB address is 16-byte aligned and the cycle is one bit, so they share no bit for any ring base the specification allows (64-byte aligned), and `^` is `|`
 
-# Equivalent: a clamp in interrupt_interval that no input reaches, or reaches only at the bound.
-src/context.rs:170 # microframes is at least 8, so the exponent is at least 3; the clamp to 3 gives 3 either way
-src/context.rs:171 # microframes is at most 255 * 8 = 2040, so the exponent is at most 10; the clamp to 10 gives 10 either way
-src/context.rs:175 # at exactly 16, `>=` clamps to 16, which is the value it already has
+# Equivalent: the high-speed clamp in interrupt_interval, at its bound.
+src/context.rs:174 # at exactly 16, `>=` clamps to 16, which is the value it already has

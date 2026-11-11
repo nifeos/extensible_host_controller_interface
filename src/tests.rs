@@ -89,6 +89,19 @@ fn the_interval_field_follows_the_speed() {
     assert_eq!(interrupt_interval(port::speed::SUPER, 200), 15);
 }
 
+/// Every full-speed `bInterval` gives an exponent from 3 to 10 whose period does not exceed it
+/// and whose double does, so the function needs no clamp.
+#[test]
+fn every_full_speed_interval_lands_in_the_specification_range() {
+    for descriptor_interval in 0..=u8::MAX {
+        let field = interrupt_interval(port::speed::FULL, descriptor_interval);
+        let microframes = u32::from(descriptor_interval.max(1)) * 8;
+        assert!((3..=10).contains(&field), "{descriptor_interval}");
+        assert!(1u32 << field <= microframes, "{descriptor_interval}");
+        assert!(2u32 << field > microframes, "{descriptor_interval}");
+    }
+}
+
 /// **A simulated controller consuming what the driver produces**: it reads from its dequeue
 /// index while the cycle bit matches its own, follows a link TRB and toggles its cycle when the
 /// link says so (xHCI 1.2 section 4.9.2), and returns what it ran. Three laps of a four-entry

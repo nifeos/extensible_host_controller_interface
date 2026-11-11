@@ -3,7 +3,7 @@
 [![check](https://github.com/nifeos/extensible_host_controller_interface/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nifeos/extensible_host_controller_interface/actions/workflows/ci.yml?query=branch%3Amain)
 [![proofs](https://github.com/nifeos/extensible_host_controller_interface/actions/workflows/proofs.yml/badge.svg?branch=main)](https://github.com/nifeos/extensible_host_controller_interface/actions/workflows/proofs.yml?query=branch%3Amain)
 [![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](https://github.com/nifeos/extensible_host_controller_interface#license)
-[![minimum Rust version](https://img.shields.io/badge/rust-1.88%2B-blue.svg)](https://github.com/nifeos/extensible_host_controller_interface/blob/main/Cargo.toml)
+[![minimum Rust version](https://img.shields.io/badge/rust-1.85%2B-blue.svg)](https://github.com/nifeos/extensible_host_controller_interface/blob/main/Cargo.toml)
 
 Everything a Universal Serial Bus (USB) host controller (xHCI) driver computes, with nothing it
 touches. That covers register offsets and field decode, Transfer Request Block (TRB) construction
@@ -110,7 +110,9 @@ To consume an event:
 2. When `event_ring.is_ready` says no, stop. Otherwise issue a read barrier, then read dwords 0 to
    2, and decode the four with `Event::decode`.
 3. Call `event_ring.advance()`, and after the events of this pass, write
-   `event_ring.dequeue_pointer()` to the interrupter's `ERDP` register (xHCI 1.2 section 4.9.4).
+   `event_ring.dequeue_pointer() | registers::EVENT_RING_DEQUEUE_POINTER_BUSY` to the
+   interrupter's `ERDP` register (xHCI 1.2 section 4.9.4). The busy bit clears Event Handler Busy,
+   and without it the interrupter raises no further interrupt (section 4.17.2).
 
 ## Building and testing
 
@@ -171,6 +173,9 @@ the assertion that the patch breaks. `git checkout -- src` reverts the patch.
 - Hubs are not modeled (route string 0), so the crate cannot address a device behind a hub. Only devices
   on the root ports work.
 - One page size: the DMA layout assumes 4 KiB pages (`PAGESIZE` bit 0).
+- Speeds are the default ids in `port::speed`. A controller whose Supported Protocol capability
+  has a speed id count other than 0 defines its own, and the crate does not decode its Protocol
+  Speed ID dwords.
 - No streams, isochronous or bulk transfers: the crate builds the TRBs a boot keyboard needs and
   nothing more.
 - `ProducerRing::enqueue` never refuses a TRB, and `ProducerRing::try_enqueue` refuses at
@@ -185,12 +190,12 @@ The reference is the xHCI 1.2 specification, chapters 4 to 7.
 
 ## Minimum Rust version
 
-1.88. To check it, install that toolchain and its bare-metal target, then test and build with it:
+1.85. To check it, install that toolchain and its bare-metal target, then test and build with it:
 
 ```sh
-rustup toolchain install 1.88 --profile minimal --target x86_64-unknown-none
-cargo +1.88 test
-cargo +1.88 build --lib --target x86_64-unknown-none
+rustup toolchain install 1.85 --profile minimal --target x86_64-unknown-none
+cargo +1.85 test
+cargo +1.85 build --lib --target x86_64-unknown-none
 ```
 
 ## License
