@@ -44,6 +44,14 @@ pub const TRANSFER_CONTROL_FIELDS_DO_NOT_OVERLAP: () = assert!(
 #[allow(dead_code)]
 pub const CYCLE_BIT_AND_CLEARED_WORD_DO_NOT_OVERLAP: () = assert!(((!1u32) & 1) == 0);
 
+/// **Whether `len` bytes at physical `buffer` can be one transfer TRB's data**: true when they do
+/// not cross a 64 KiB boundary. A data buffer that a Transfer TRB references shall not span one
+/// (xHCI 1.2 section 6.4.1, the note on 64 KiB boundaries); software chains several TRBs for a
+/// buffer that does. A buffer that ends exactly at a boundary fits, and so does an empty one.
+pub const fn fits_one_transfer_request_block(buffer: u64, len: u16) -> bool {
+    (buffer & 0xffff) + len as u64 <= 0x1_0000
+}
+
 pub(crate) const fn control(kind: u8) -> u32 {
     (kind as u32) << 10
 }
@@ -184,7 +192,9 @@ impl TransferRequestBlock {
         ])
     }
 
-    /// A control transfer's Data Stage: `len` bytes at `buffer` (physical).
+    /// A control transfer's Data Stage: `len` bytes at `buffer` (physical). The bytes must not
+    /// cross a 64 KiB boundary ([`fits_one_transfer_request_block`] says whether they do); this
+    /// builder does not check.
     pub const fn data(buffer: u64, len: u16, inbound: bool) -> TransferRequestBlock {
         TransferRequestBlock::pointer(
             buffer,
@@ -211,7 +221,9 @@ impl TransferRequestBlock {
     }
 
     /// A Normal TRB: `len` bytes at `buffer` (physical), with an event on completion or a short
-    /// packet. What an interrupt `IN` endpoint's ring holds.
+    /// packet. What an interrupt `IN` endpoint's ring holds. The bytes must not cross a 64 KiB
+    /// boundary ([`fits_one_transfer_request_block`] says whether they do); this builder does not
+    /// check.
     pub const fn normal(buffer: u64, len: u16) -> TransferRequestBlock {
         TransferRequestBlock::pointer(
             buffer,

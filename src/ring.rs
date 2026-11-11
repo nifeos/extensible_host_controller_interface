@@ -8,12 +8,15 @@ use super::*;
 /// # Examples
 ///
 /// Four entries are three usable slots and a link TRB; the third enqueue also writes the link, and
-/// the cycle flips for the next lap:
+/// the cycle flips for the next lap. The four enqueues below show the wrap only: a driver keeps at
+/// most [`capacity`](ProducerRing::capacity) of them outstanding, here two, and waits for the
+/// controller to consume one before it places the next.
 ///
 /// ```
 /// use extensible_host_controller_interface::{ProducerRing, TransferRequestBlock};
 ///
 /// let mut ring = ProducerRing::new(0x1000, 4);
+/// assert_eq!(ring.capacity(), 2);
 /// let a = ring.enqueue(TransferRequestBlock::enable_slot());
 /// assert_eq!((a.index, a.transfer_request_block.is_cycle(), a.link), (0, true, None));
 /// ring.enqueue(TransferRequestBlock::enable_slot());
@@ -37,9 +40,9 @@ pub struct ProducerRing {
 /// **What [`ProducerRing::enqueue`] says to write**: the TRB at `index`, stamped with this lap's
 /// cycle, and when the ring has just filled its lap, the link TRB at the last index too.
 ///
-/// The driver writes `transfer_request_block` and then `link`, each with the cycle dword last: until a TRB's cycle bit
-/// matches, the controller treats it as not yet produced, so the dword that carries it goes in
-/// after the rest.
+/// The driver writes `transfer_request_block` and then `link`, each with the cycle dword last: until
+/// a TRB's cycle bit matches, the controller treats it as not yet produced, so the dword that
+/// carries it goes in after the rest. [`ProducerRing::enqueue`] states the order and the barriers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TransferRequestBlockPlacement {
     /// Where the TRB goes.
@@ -70,6 +73,14 @@ impl ProducerRing {
         }
     }
 
+    /// **The most TRBs the caller may have outstanding**: placed, and not yet consumed by the
+    /// controller. One entry is the link, and one more stays empty, because the ring is full when
+    /// advancing the Enqueue Pointer would make it equal to the Dequeue Pointer (xHCI 1.2 section
+    /// 4.9.2.2). Placing more overwrites a TRB the controller has not reached.
+    pub const fn capacity(&self) -> u16 {
+        self.entries - 2
+    }
+
     /// The physical address of entry `index`.
     pub const fn entry_physical_address(&self, index: u16) -> u64 {
         self.base + index as u64 * 16
@@ -82,6 +93,18 @@ impl ProducerRing {
     }
 
     /// **Place one TRB**, and the link if this fills the lap.
+    ///
+    /// The ring does not know how far the controller has read, so it never refuses: the caller
+    /// keeps at most [`capacity`](Self::capacity) TRBs outstanding, counting each one out when its
+    /// completion event arrives.
+    ///
+    /// The caller then writes the placement to memory in this order (xHCI 1.2 section 4.9.2:
+    /// the controller takes a TRB as produced once its cycle bit matches). First dwords 0 to 2 of
+    /// the TRB at [`entry_physical_address`](Self::entry_physical_address)`(index)`, then a write
+    /// barrier, then dword 3, which holds the cycle bit. The link, when there is one, goes the
+    /// same way after it. Last comes a write barrier that orders all of that memory before the
+    /// doorbell register write. On a weakly ordered machine (aarch64, riscv64) both barriers are
+    /// instructions, not only compiler fences; Linux spells them `wmb()`.
     pub fn enqueue(
         &mut self,
         transfer_request_block: TransferRequestBlock,
@@ -137,6 +160,14 @@ impl EventRing {
 
     /// Whether `transfer_request_block`, read at [`index`](Self::index), is an event the controller
     /// has written this lap.
+    ///
+    /// The controller writes an event's dword 3, which holds the cycle bit, after the other three
+    /// (xHCI 1.2 section 4.11.3, the implementation note on Event TRB updating). So the caller
+    /// reads dword 3 first and asks this; only when it is ready does a read barrier follow, and
+    /// then dwords 0 to 2. Reading all four and then asking can pair a fresh cycle bit with stale
+    /// data on a weakly ordered machine (aarch64, riscv64), where the barrier is an instruction;
+    /// Linux spells it `rmb()`. After the event is handled, [`advance`](Self::advance) and the
+    /// `ERDP` write follow (xHCI 1.2 section 4.9.4).
     pub const fn is_ready(&self, transfer_request_block: &TransferRequestBlock) -> bool {
         transfer_request_block.is_cycle() == self.cycle
     }

@@ -111,14 +111,13 @@ fn a_device_context_index_is_one_to_thirty_one_and_distinct() {
     assert!(context::input_offset(index + 1, context_bytes) + context_bytes <= 33 * context_bytes);
 }
 
-/// Falsification: replayable `falsifications/verification.the_slot_and_endpoint_contexts_keep_each_field_in_its_own_bits.patch`
-/// **A slot context and an endpoint context hold each field in its own bits, for every input.**
-/// What goes in comes back out of exactly the field the specification gives it (xHCI 1.2 sections
-/// 6.2.2 and 6.2.3), and no field spills into a neighbor: the speed and the context count are
-/// masked to their widths, the endpoint's dequeue pointer is reassembled from its two dwords, and
-/// the reserved dwords stay zero.
+/// Falsification: replayable `falsifications/verification.a_slot_context_keeps_each_field_in_its_own_bits.patch`
+/// **A slot context holds each field in its own bits, for every input.** What goes in comes back
+/// out of exactly the field the specification gives it (xHCI 1.2 section 6.2.2), and no field
+/// spills into a neighbor: the speed and the context count are masked to their widths, and the
+/// reserved dwords stay zero.
 #[kani::proof]
-fn the_slot_and_endpoint_contexts_keep_each_field_in_its_own_bits() {
+fn a_slot_context_keeps_each_field_in_its_own_bits() {
     let speed: u8 = kani::any();
     let port: u8 = kani::any();
     let entries: u8 = kani::any();
@@ -128,7 +127,17 @@ fn the_slot_and_endpoint_contexts_keep_each_field_in_its_own_bits() {
     assert_eq!(slot[0] & !((0xf << 20) | (0x1f << 27)), 0);
     assert_eq!(slot[1], (port as u32) << 16);
     assert_eq!(slot[2..], [0; 6]);
+}
 
+/// Falsification: replayable `falsifications/verification.an_endpoint_context_keeps_each_field_in_its_own_bits.patch`
+/// **An endpoint context holds each field in its own bits, for every input.** What goes in comes
+/// back out of exactly the field the specification gives it (xHCI 1.2 section 6.2.3, Table 6-9
+/// for dword 1), and no field spills into a neighbor: the endpoint type is masked to bits 3 to 5,
+/// so the reserved bit 6, Host Initiate Disable at bit 7 and Max Burst Size at bits 8 to 15 stay
+/// zero; the dequeue pointer is reassembled from its two dwords, and the reserved dwords stay
+/// zero.
+#[kani::proof]
+fn an_endpoint_context_keeps_each_field_in_its_own_bits() {
     let kind: u8 = kani::any();
     let maximum_packet: u16 = kani::any();
     let interval: u8 = kani::any();
@@ -136,10 +145,11 @@ fn the_slot_and_endpoint_contexts_keep_each_field_in_its_own_bits() {
     let average_trb: u16 = kani::any();
     let endpoint = context::endpoint(kind, maximum_packet, interval, dequeue, average_trb);
     assert_eq!(endpoint[0], (interval as u32) << 16);
-    assert_eq!((endpoint[1] >> 1) & 0x3, 3);
-    assert_eq!((endpoint[1] >> 3) & 0xff, kind as u32);
-    assert_eq!(endpoint[1] >> 16, maximum_packet as u32);
     assert_eq!(endpoint[1] & 1, 0);
+    assert_eq!((endpoint[1] >> 1) & 0x3, 3);
+    assert_eq!((endpoint[1] >> 3) & 0x7, kind as u32 & 0x7);
+    assert_eq!((endpoint[1] >> 6) & 0x3ff, 0);
+    assert_eq!(endpoint[1] >> 16, maximum_packet as u32);
     assert_eq!(endpoint[2] as u64 | (endpoint[3] as u64) << 32, dequeue);
     assert_eq!(endpoint[4] & 0xffff, average_trb as u32);
     let maximum_service_interval_payload = if kind == context::CONTROL {
