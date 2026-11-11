@@ -44,19 +44,22 @@ fn events_decode_by_type() {
 /// The event ring's consumer flips its cycle at the wrap, so last lap's events read as stale.
 #[test]
 fn the_event_ring_laps() {
-    let mut ring = EventRing::new(0x2000, 2);
+    let mut ring = EventRing::new(0x2000, 16);
     let fresh = TransferRequestBlock([0, 0, 0, 1]);
     assert!(ring.is_ready(&fresh));
     ring.advance();
     assert_eq!(ring.index(), 1);
     assert_eq!(ring.dequeue_pointer(), 0x2010);
-    ring.advance();
+    for _ in 1..16 {
+        assert!(ring.is_ready(&fresh));
+        ring.advance();
+    }
     assert_eq!(ring.dequeue_pointer(), 0x2000);
     assert!(!ring.is_ready(&fresh));
-    assert_eq!(ring.segment_table_entry(), [0x2000, 0, 2, 0]);
+    assert_eq!(ring.segment_table_entry(), [0x2000, 0, 16, 0]);
     // A ring above 4 GiB: the table entry's second dword is the base's high half.
-    let high = EventRing::new(0x3_0000_2000, 4);
-    assert_eq!(high.segment_table_entry(), [0x2000, 3, 4, 0]);
+    let high = EventRing::new(0x3_0000_2000, 4096);
+    assert_eq!(high.segment_table_entry(), [0x2000, 3, 4096, 0]);
 }
 
 #[test]
@@ -247,17 +250,19 @@ fn every_command_decodes_back_to_its_slot_endpoint_and_pointer() {
         Event::decode(TransferRequestBlock([0, 0, 0, 37 << 10])),
         Event::Other { kind: 37 }
     );
-    let ring = EventRing::new(0x2000, 4);
+    let ring = EventRing::new(0x2000, 16);
     assert_eq!(ring.index(), 0);
 }
 
+/// **The smallest producer ring, three entries, links on every second enqueue.**
 #[test]
-fn a_producer_ring_of_two_links_every_time() {
-    let mut ring = ProducerRing::new(0x9000, 2);
+fn a_producer_ring_of_three_links_every_second_time() {
+    let mut ring = ProducerRing::new(0x9000, 3);
+    assert_eq!(ring.enqueue(TransferRequestBlock::enable_slot()).link, None);
     let p = ring.enqueue(TransferRequestBlock::enable_slot());
-    assert_eq!(p.index, 0);
+    assert_eq!(p.index, 1);
     let (at, link) = p.link.unwrap();
-    assert_eq!(at, 1);
+    assert_eq!(at, 2);
     assert_eq!(link.kind(), transfer_request_block_type::LINK);
     assert_eq!(link.0[0], 0x9000);
     assert_eq!(ring.dequeue_pointer(), 0x9000); // back at 0, cycle now 0
@@ -268,9 +273,37 @@ fn a_producer_ring_of_two_links_every_time() {
 /// 4.9.2.2).
 #[test]
 fn a_producer_ring_holds_two_fewer_than_its_entries() {
-    assert_eq!(ProducerRing::new(0x1000, 2).capacity(), 0);
+    assert_eq!(ProducerRing::new(0x1000, 3).capacity(), 1);
     assert_eq!(ProducerRing::new(0x1000, 4).capacity(), 2);
-    assert_eq!(ProducerRing::new(0x1000, 256).capacity(), 254);
+    assert_eq!(ProducerRing::new(0x1000, 4096).capacity(), 4094);
+}
+
+/// **A producer ring of two entries is refused**: its capacity would be zero.
+#[test]
+#[should_panic(expected = "a producer ring holds 3 to 4096 entries")]
+fn a_producer_ring_of_two_is_refused() {
+    ProducerRing::new(0x1000, 2);
+}
+
+/// **A producer ring larger than one 64 KiB segment is refused** (xHCI 1.2 Table 6-1).
+#[test]
+#[should_panic(expected = "a producer ring holds 3 to 4096 entries")]
+fn a_producer_ring_of_4097_is_refused() {
+    ProducerRing::new(0x1000, 4097);
+}
+
+/// **An event ring segment under 16 entries is refused** (xHCI 1.2 Table 6-95).
+#[test]
+#[should_panic(expected = "an event ring segment holds 16 to 4096 entries")]
+fn an_event_ring_of_15_is_refused() {
+    EventRing::new(0x2000, 15);
+}
+
+/// **An event ring segment over 4096 entries is refused** (xHCI 1.2 Table 6-95).
+#[test]
+#[should_panic(expected = "an event ring segment holds 16 to 4096 entries")]
+fn an_event_ring_of_4097_is_refused() {
+    EventRing::new(0x2000, 4097);
 }
 
 /// **A buffer fits one transfer TRB exactly when it stays inside one 64 KiB block**, ending at the
@@ -287,17 +320,25 @@ fn a_buffer_fits_one_transfer_request_block_until_it_crosses_64_kibibytes() {
     assert!(!fits_one_transfer_request_block(u64::MAX, 2));
 }
 
-/// **An endpoint type code above 7 stays in its three bits** (xHCI 1.2 Table 6-9): bit 6, Host
-/// Initiate Disable and Max Burst Size read zero.
+/// **Each endpoint type writes its own code** (xHCI 1.2 Table 6-9) in bits 3 to 5, and bit 6,
+/// Host Initiate Disable and Max Burst Size read zero.
 #[test]
-fn an_endpoint_type_above_seven_stays_in_its_field() {
-    let endpoint = context::endpoint(0xff, 8, 0, 0x1000, 8);
-    assert_eq!((endpoint[1] >> 3) & 0x7, 7);
-    assert_eq!((endpoint[1] >> 6) & 0x3ff, 0);
-    assert_eq!(
-        context::endpoint(context::INTERRUPT_IN, 8, 0, 0, 8)[1] >> 3 & 0x7,
-        7
-    );
+fn each_endpoint_type_writes_its_own_code() {
+    use context::EndpointType::*;
+    let kinds = [
+        IsochronousOut,
+        BulkOut,
+        InterruptOut,
+        Control,
+        IsochronousIn,
+        BulkIn,
+        InterruptIn,
+    ];
+    for (code, kind) in (1..).zip(kinds) {
+        let endpoint = context::endpoint(kind, 8, 0, 0x1000, 8);
+        assert_eq!((endpoint[1] >> 3) & 0x7, code);
+        assert_eq!((endpoint[1] >> 6) & 0x3ff, 0);
+    }
 }
 
 /// **A device context index above 31 stays in the five-bit Endpoint ID** of Reset Endpoint and

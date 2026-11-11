@@ -54,16 +54,24 @@ pub struct TransferRequestBlockPlacement {
 }
 
 impl ProducerRing {
+    /// **The fewest entries a producer ring may have**: the link, one entry that stays empty
+    /// (xHCI 1.2 section 4.9.2.2) and one TRB, so that [`capacity`](Self::capacity) is at least 1.
+    pub const MINIMUM_SEGMENT_ENTRIES: u16 = 3;
+
+    /// **The most entries a producer ring may have**: a transfer or command ring segment is at most
+    /// 64 KiB (xHCI 1.2 Table 6-1), which is 4096 TRBs of 16 bytes.
+    pub const MAXIMUM_SEGMENT_ENTRIES: u16 = 4096;
+
     /// A ring of `entries` TRBs (the last of them the link) at physical `base`, in the state a
     /// zeroed ring starts in: producer cycle 1, so the zeros read as not produced.
     ///
     /// # Panics
-    /// When `entries` is under 2, which is a ring with no room for anything but its link; every
-    /// caller passes a constant.
+    /// When `entries` is outside [`MINIMUM_SEGMENT_ENTRIES`](Self::MINIMUM_SEGMENT_ENTRIES) to
+    /// [`MAXIMUM_SEGMENT_ENTRIES`](Self::MAXIMUM_SEGMENT_ENTRIES); every caller passes a constant.
     pub const fn new(base: u64, entries: u16) -> ProducerRing {
         assert!(
-            entries >= 2,
-            "a producer ring needs a slot besides its link"
+            entries >= Self::MINIMUM_SEGMENT_ENTRIES && entries <= Self::MAXIMUM_SEGMENT_ENTRIES,
+            "a producer ring holds 3 to 4096 entries"
         );
         ProducerRing {
             base,
@@ -139,12 +147,24 @@ pub struct EventRing {
 }
 
 impl EventRing {
+    /// **The fewest entries an event ring segment may have** (xHCI 1.2 section 6.5, Table 6-95,
+    /// the Ring Segment Size field).
+    pub const MINIMUM_SEGMENT_ENTRIES: u16 = 16;
+
+    /// **The most entries an event ring segment may have** (xHCI 1.2 section 6.5, Table 6-95).
+    pub const MAXIMUM_SEGMENT_ENTRIES: u16 = 4096;
+
     /// A zeroed ring: consumer cycle 1, so the zeros read as not yet written.
     ///
     /// # Panics
-    /// When `entries` is zero; every caller passes a constant.
+    /// When `entries` is outside [`MINIMUM_SEGMENT_ENTRIES`](Self::MINIMUM_SEGMENT_ENTRIES) to
+    /// [`MAXIMUM_SEGMENT_ENTRIES`](Self::MAXIMUM_SEGMENT_ENTRIES), which a controller refuses; every
+    /// caller passes a constant.
     pub const fn new(base: u64, entries: u16) -> EventRing {
-        assert!(entries > 0, "an event ring needs an entry");
+        assert!(
+            entries >= Self::MINIMUM_SEGMENT_ENTRIES && entries <= Self::MAXIMUM_SEGMENT_ENTRIES,
+            "an event ring segment holds 16 to 4096 entries"
+        );
         EventRing {
             base,
             entries,

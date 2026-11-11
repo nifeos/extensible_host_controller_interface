@@ -1,18 +1,18 @@
 Falsifies `extensible_host_controller_interface::verification::an_endpoint_context_keeps_each_field_in_its_own_bits`.
 
-The defect: `endpoint` forgets to mask the endpoint type to its three bits, so a type code above 7 spills into the reserved bit 6, Host Initiate Disable and Max Burst Size.
+The defect: `endpoint` shifts the endpoint type one bit too far, so the type lands in bits 4 to 6 and the code read back from bits 3 to 5 is wrong.
 
-Expected to fail: the harness's check that bits 6 to 15 of dword 1 are zero.
+Expected to fail: the harness's check that bits 3 to 5 of dword 1 hold the endpoint type's code.
 
 diff --git a/src/context.rs b/src/context.rs
 --- a/src/context.rs
 +++ b/src/context.rs
-@@ -98,7 +98,7 @@
+@@ -117,7 +117,7 @@
      };
      [
          (interval as u32) << 16,
--        3 << 1 | (kind as u32 & 0x7) << 3 | (maximum_packet as u32) << 16,
-+        3 << 1 | (kind as u32) << 3 | (maximum_packet as u32) << 16,
+-        3 << 1 | (kind as u32) << 3 | (maximum_packet as u32) << 16,
++        3 << 1 | (kind as u32) << 4 | (maximum_packet as u32) << 16,
          dequeue as u32,
          (dequeue >> 32) as u32,
          average_transfer_request_block_bytes as u32 | maximum_service_interval_payload << 16,
