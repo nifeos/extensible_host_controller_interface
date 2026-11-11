@@ -352,3 +352,66 @@ fn an_endpoint_index_above_thirty_one_stays_in_its_field() {
         assert_eq!(built.0[3] >> 16 & 0xff, 0x1f);
     }
 }
+
+/// **Every completion code has its specification name** (xHCI 1.2 Table 6-90): the 36 defined
+/// codes in order, code 30 and 37 to 191 reserved, and the two vendor ranges by name.
+#[test]
+fn every_completion_code_has_its_specification_name() {
+    let table = [
+        "Invalid",
+        "Success",
+        "Data Buffer Error",
+        "Babble Detected Error",
+        "USB Transaction Error",
+        "TRB Error",
+        "Stall Error",
+        "Resource Error",
+        "Bandwidth Error",
+        "No Slots Available Error",
+        "Invalid Stream Type Error",
+        "Slot Not Enabled Error",
+        "Endpoint Not Enabled Error",
+        "Short Packet",
+        "Ring Underrun",
+        "Ring Overrun",
+        "VF Event Ring Full Error",
+        "Parameter Error",
+        "Bandwidth Overrun Error",
+        "Context State Error",
+        "No Ping Response Error",
+        "Event Ring Full Error",
+        "Incompatible Device Error",
+        "Missed Service Error",
+        "Command Ring Stopped",
+        "Command Aborted",
+        "Stopped",
+        "Stopped - Length Invalid",
+        "Stopped - Short Packet",
+        "Max Exit Latency Too Large Error",
+        "Reserved",
+        "Isoch Buffer Overrun",
+        "Event Lost Error",
+        "Undefined Error",
+        "Invalid Stream ID Error",
+        "Secondary Bandwidth Error",
+        "Split Transaction Error",
+        "Reserved",
+    ];
+    for (code, expected) in (0..).zip(table) {
+        assert_eq!(completion::name(code), expected, "code {code}");
+    }
+    assert_eq!(completion::name(completion::STALL), "Stall Error");
+    assert_eq!(
+        completion::name(completion::SPLIT_TRANSACTION_ERROR),
+        "Split Transaction Error"
+    );
+    for code in 37..=191 {
+        assert_eq!(completion::name(code), "Reserved");
+    }
+    for code in 192..=223 {
+        assert_eq!(completion::name(code), "Vendor Defined Error");
+    }
+    for code in 224..=255 {
+        assert_eq!(completion::name(code), "Vendor Defined Info");
+    }
+}

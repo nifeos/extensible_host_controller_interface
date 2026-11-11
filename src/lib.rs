@@ -39,7 +39,8 @@ pub const PAGE_BYTES: u64 = 4096;
 /// Transfer Request Block (TRB) type codes (xHCI 1.2 Table 6-91).
 pub mod transfer_request_block_type;
 
-/// Completion codes (xHCI 1.2 Table 6-90), the ones a keyboard driver tells apart.
+/// Completion codes (xHCI 1.2 section 6.4.5, Table 6-90): every code the specification defines,
+/// and [`completion::name`] for a transcript.
 pub mod completion;
 
 #[cfg(test)]
