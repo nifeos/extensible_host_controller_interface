@@ -1,6 +1,6 @@
 [package]
 name = "extensible_host_controller_interface"
-version = "0.1.0-pre.1"
+version = "0.1.0-pre.2"
 edition = "2024"
 rust-version = "1.85"
 description = "xHCI host controller logic as pure computation: register offsets and decode, TRBs, rings, contexts and port status, proven with Kani"
