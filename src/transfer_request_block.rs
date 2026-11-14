@@ -26,7 +26,7 @@ pub(crate) const IMMEDIATE_DATA: u32 = 1 << 6;
 // exclusions for the TRB builders refer to them by name, which is why they stay despite the
 // dead-code allowance. Removing them leaves those exclusions without their justification.
 #[allow(dead_code)]
-pub const TRANSFER_CONTROL_FIELDS_DO_NOT_OVERLAP: () = assert!(
+pub(crate) const TRANSFER_CONTROL_FIELDS_DO_NOT_OVERLAP: () = assert!(
     ((0x3fu32 << 10) & (1 << 1 | 1 << 2 | 1 << 5 | 1 << 6)) == 0
         && ((0x3fu32 << 10 | 1 << 1 | 1 << 2 | 1 << 5 | 1 << 6) & (u32::MAX << 16)) == 0
         && ((0xffu32 << 16) & (0xff << 24)) == 0
@@ -42,7 +42,7 @@ pub const TRANSFER_CONTROL_FIELDS_DO_NOT_OVERLAP: () = assert!(
 // exclusion for `with_cycle` refers to it by name, which is why it stays despite the dead-code
 // allowance. Removing it leaves that exclusion without its justification.
 #[allow(dead_code)]
-pub const CYCLE_BIT_AND_CLEARED_WORD_DO_NOT_OVERLAP: () = assert!(((!1u32) & 1) == 0);
+pub(crate) const CYCLE_BIT_AND_CLEARED_WORD_DO_NOT_OVERLAP: () = assert!(((!1u32) & 1) == 0);
 
 /// **Whether `len` bytes at physical `buffer` can be one transfer TRB's data**: true when they do
 /// not cross a 64 KiB boundary. A data buffer that a Transfer TRB references shall not span one

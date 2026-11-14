@@ -51,7 +51,7 @@ pub enum Event {
 // exclusion for `Event::decode` refers to it by name, which is why it stays despite the dead-code
 // allowance. Removing it leaves that exclusion without its justification.
 #[allow(dead_code)]
-pub const EVENT_POINTER_HALVES_DO_NOT_OVERLAP: () =
+pub(crate) const EVENT_POINTER_HALVES_DO_NOT_OVERLAP: () =
     assert!((((u32::MAX as u64) << 32) & u32::MAX as u64) == 0);
 
 impl Event {

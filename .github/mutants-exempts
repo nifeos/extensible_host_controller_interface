@@ -23,8 +23,8 @@ src/port.rs:71 # the eight preserved fields share no bit, so `^` is `|` (PRESERV
 src/registers.rs:140 # the three SMI-enable fields at 0, 4 and 13:15 share no bit, so `^` is `|` (LEGACY_ENABLE_BITS_DO_NOT_OVERLAP)
 src/registers.rs:206 # the scratchpad count's high field at 5:9 and low field at 0:4 share no bit, so `^` is `|` (SCRATCHPAD_FIELDS_DO_NOT_OVERLAP)
 src/context.rs:71 # the slot context's speed at 20:23 and entries at 27:31 share no bit, so `^` is `|` (SLOT_CONTEXT_FIELDS_DO_NOT_OVERLAP)
-src/context.rs:120 # the error count at 1:2, the endpoint type at 3:5 and packet size at 16:31 share no bit, so `^` is `|` (ENDPOINT_CONTEXT_FIELDS_DO_NOT_OVERLAP)
-src/context.rs:123 # the two u16 halves of the endpoint context's dword 4 share no bit, so `^` is `|` (ENDPOINT_CONTEXT_FIELDS_DO_NOT_OVERLAP)
+src/context.rs:121 # the error count at 1:2, the endpoint type at 3:5 and packet size at 16:31 share no bit, so `^` is `|` (ENDPOINT_CONTEXT_FIELDS_DO_NOT_OVERLAP)
+src/context.rs:124 # the two u16 halves of the endpoint context's dword 4 share no bit, so `^` is `|` (ENDPOINT_CONTEXT_FIELDS_DO_NOT_OVERLAP)
 src/event.rs:61 # the pointer's low and high words share no bit, so `^` is `|` (EVENT_POINTER_HALVES_DO_NOT_OVERLAP)
 src/transfer_request_block.rs:90 # the word with bit 0 cleared and the bool cycle share no bit, so `^` is `|` (CYCLE_BIT_AND_CLEARED_WORD_DO_NOT_OVERLAP)
 src/transfer_request_block.rs:108 # the type at 10:15 and the toggle at 1 share no bit, so `^` is `|` (TRANSFER_CONTROL_FIELDS_DO_NOT_OVERLAP)
@@ -46,4 +46,4 @@ src/transfer_request_block.rs:248 # the type at 10:15 and the completion and sho
 src/ring.rs:105 # a TRB address is 16-byte aligned and the cycle is one bit, so they share no bit for any ring base the specification allows (64-byte aligned), and `^` is `|`
 
 # Equivalent: the high-speed clamp in interrupt_interval, at its bound.
-src/context.rs:174 # at exactly 16, `>=` clamps to 16, which is the value it already has
+src/context.rs:175 # at exactly 16, `>=` clamps to 16, which is the value it already has

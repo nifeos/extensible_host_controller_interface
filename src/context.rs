@@ -83,8 +83,9 @@ pub const fn slot(speed: u8, port: u8, entries: u8) -> [u32; 8] {
 /// at 27:31), which the compiler checks here; the mutation exclusion for [`slot`] names this
 /// constant. The constant-assertion lint is off on purpose: the assertion is constant by
 /// construction, and the compiler checking it is its job.
-#[allow(clippy::assertions_on_constants, clippy::eq_op)]
-pub const SLOT_CONTEXT_FIELDS_DO_NOT_OVERLAP: () = assert!(((0xfu32 << 20) & (0x1f << 27)) == 0);
+#[allow(clippy::assertions_on_constants, clippy::eq_op, dead_code)]
+pub(crate) const SLOT_CONTEXT_FIELDS_DO_NOT_OVERLAP: () =
+    assert!(((0xfu32 << 20) & (0x1f << 27)) == 0);
 
 /// The slot context's USB device number, assigned by Address Device: dword 3's low byte of a slot
 /// context the controller wrote.
@@ -132,8 +133,8 @@ pub const fn endpoint(
 /// the mutation exclusion for [`endpoint`] names this constant. The constant-assertion lint is
 /// off on purpose: the assertion is constant by construction, and the compiler checking it is
 /// its job.
-#[allow(clippy::assertions_on_constants, clippy::eq_op)]
-pub const ENDPOINT_CONTEXT_FIELDS_DO_NOT_OVERLAP: () = assert!(
+#[allow(clippy::assertions_on_constants, clippy::eq_op, dead_code)]
+pub(crate) const ENDPOINT_CONTEXT_FIELDS_DO_NOT_OVERLAP: () = assert!(
     ((3u32 << 1) & (0x7 << 3)) == 0
         && ((0x7u32 << 3) & (0xffff << 16)) == 0
         && ((0xffffu32 << 16) & 0xffff) == 0

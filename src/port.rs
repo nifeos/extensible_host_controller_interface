@@ -52,8 +52,8 @@ pub const CHANGES: u32 = CONNECT_CHANGE
 /// here; the mutation exclusions for this file's `|` constants name this constant. The
 /// constant-assertion lint is off on purpose: the assertion is constant by construction, and the
 /// compiler checking it is its job.
-#[allow(clippy::assertions_on_constants, clippy::eq_op)]
-pub const PORT_CHANGE_BITS_DO_NOT_OVERLAP: () = assert!(
+#[allow(clippy::assertions_on_constants, clippy::eq_op, dead_code)]
+pub(crate) const PORT_CHANGE_BITS_DO_NOT_OVERLAP: () = assert!(
     CONNECT_CHANGE
         + ENABLE_CHANGE
         + WARM_RESET_CHANGE
@@ -74,8 +74,8 @@ pub(crate) const PRESERVE: u32 =
 /// compiler checks here; the mutation exclusions for this file's `|` constants name this
 /// constant. The constant-assertion lint is off on purpose: the assertion is constant by
 /// construction, and the compiler checking it is its job.
-#[allow(clippy::assertions_on_constants, clippy::eq_op)]
-pub const PRESERVED_FIELDS_DO_NOT_OVERLAP: () = assert!(
+#[allow(clippy::assertions_on_constants, clippy::eq_op, dead_code)]
+pub(crate) const PRESERVED_FIELDS_DO_NOT_OVERLAP: () = assert!(
     1 + (1 << 3) + (0xf << 10) + (1 << 30) + (0xf << 5) + (1 << 9) + (0x3 << 14) + (0x7 << 25)
         == PRESERVE
 );
