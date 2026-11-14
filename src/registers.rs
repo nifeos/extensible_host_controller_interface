@@ -143,16 +143,16 @@ pub const LEGACY_SYSTEM_MANAGEMENT_INTERRUPT_ENABLES: u32 = 1 | 1 << 4 | 0b111 <
 /// mutation exclusions for this file's constants name this constant. The constant-assertion lint
 /// is off on purpose: the assertion is constant by construction, and the compiler checking it is
 /// its job.
-#[allow(clippy::assertions_on_constants, clippy::eq_op)]
-pub const LEGACY_ENABLE_BITS_DO_NOT_OVERLAP: () =
+#[allow(clippy::assertions_on_constants, clippy::eq_op, dead_code)]
+pub(crate) const LEGACY_ENABLE_BITS_DO_NOT_OVERLAP: () =
     assert!(1 + (1 << 4) + (0b111 << 13) == LEGACY_SYSTEM_MANAGEMENT_INTERRUPT_ENABLES);
 
 /// The scratchpad count's two fields share no bit (the high field shifted to 5:9, the low field
 /// at 0:4), which the compiler checks here; the mutation exclusion for
 /// [`Capabilities::decode`] names this constant. The constant-assertion lint is off on purpose:
 /// the assertion is constant by construction, and the compiler checking it is its job.
-#[allow(clippy::assertions_on_constants, clippy::eq_op)]
-pub const SCRATCHPAD_FIELDS_DO_NOT_OVERLAP: () = assert!(((0x1fu32 << 5) & 0x1f) == 0);
+#[allow(clippy::assertions_on_constants, clippy::eq_op, dead_code)]
+pub(crate) const SCRATCHPAD_FIELDS_DO_NOT_OVERLAP: () = assert!(((0x1fu32 << 5) & 0x1f) == 0);
 
 /// The write-one-to-clear event bits of `USBLEGCTLSTS`.
 pub const LEGACY_SYSTEM_MANAGEMENT_INTERRUPT_EVENTS: u32 = 0b111 << 29;
