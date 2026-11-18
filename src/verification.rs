@@ -3,12 +3,17 @@ use crate::registers::find_extended;
 
 /// Falsification: replayable `falsifications/verification.a_producer_ring_stays_in_bounds.patch`
 /// **A producer ring never places a TRB on its link slot or past the end**, and places the link
-/// exactly on the last slot, from every reachable state.
+/// exactly on the last slot, from every reachable state of every ring size
+/// [`ProducerRing::new`] accepts.
 #[kani::proof]
 fn a_producer_ring_stays_in_bounds() {
     let entries: u16 = kani::any();
     let enqueue: u16 = kani::any();
-    kani::assume(entries >= 2 && enqueue < entries - 1);
+    kani::assume(
+        (ProducerRing::MINIMUM_SEGMENT_ENTRIES..=ProducerRing::MAXIMUM_SEGMENT_ENTRIES)
+            .contains(&entries)
+            && enqueue < entries - 1,
+    );
     let mut ring = ProducerRing {
         base: kani::any(),
         entries,
@@ -27,13 +32,18 @@ fn a_producer_ring_stays_in_bounds() {
 
 /// Falsification: replayable `falsifications/verification.the_event_ring_stays_in_bounds_and_flips_only_at_the_wrap.patch`
 /// **The event ring's dequeue index stays inside the segment, and its cycle flips exactly when the
-/// index wraps**, from every reachable state. The physical address handed to `ERDP` stays inside
-/// the segment too, for a segment that does not run past the end of the address space.
+/// index wraps**, from every reachable state of every segment size [`EventRing::new`] accepts.
+/// The physical address handed to `ERDP` stays inside the segment too, for a segment that does
+/// not run past the end of the address space.
 #[kani::proof]
 fn the_event_ring_stays_in_bounds_and_flips_only_at_the_wrap() {
     let entries: u16 = kani::any();
     let dequeue: u16 = kani::any();
-    kani::assume(entries > 0 && dequeue < entries);
+    kani::assume(
+        (EventRing::MINIMUM_SEGMENT_ENTRIES..=EventRing::MAXIMUM_SEGMENT_ENTRIES)
+            .contains(&entries)
+            && dequeue < entries,
+    );
     let base: u64 = kani::any();
     // The segment is a physical range that exists, so its end does not wrap the address space.
     kani::assume(base.checked_add(u64::from(entries) * 16).is_some());
