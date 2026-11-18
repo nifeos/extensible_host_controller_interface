@@ -1,4 +1,6 @@
 //! **One Transfer Request Block (TRB)** and the builders for the TRBs the driver writes.
+//!
+//! Reach for it to build each command and transfer before placing it on a producer ring.
 
 use super::*;
 

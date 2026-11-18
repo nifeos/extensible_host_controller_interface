@@ -1,4 +1,6 @@
 //! **An event the controller wrote**, decoded.
+//!
+//! Reach for it after the event ring says an entry is ready, to learn what the controller reported.
 
 use super::*;
 

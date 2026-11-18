@@ -1,4 +1,6 @@
 //! **The rings**: the producer rings the driver fills and the event ring it drains.
+//!
+//! Reach for them to know where the next TRB goes, when to write a link, and which event is next.
 
 use super::*;
 

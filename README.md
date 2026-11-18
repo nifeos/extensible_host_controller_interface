@@ -128,10 +128,15 @@ Run `rustup target add` once, before the first bare-metal build. Without it, tha
 
 ### Running the proofs
 
-The proofs need Kani, which `rustup` does not install. Run `cargo install --locked
-kani-verifier --version 0.68.0`, then `cargo kani setup`. The setup step downloads a model
-checker, so it needs network access. CI uses version 0.68.0, and another version may verify
-differently.
+The proofs need Kani, which `rustup` does not install. Install it once, with network access,
+since the setup step downloads a model checker:
+
+```sh
+cargo install --locked kani-verifier --version 0.68.0
+cargo kani setup
+```
+
+CI uses version 0.68.0, and another version may verify differently.
 
 Then `cargo kani`, from the crate's directory, runs all thirteen harnesses. On an x86_64 Linux
 desktop that takes about 2 minutes and peaks near 0.8 gigabytes of memory.

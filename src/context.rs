@@ -7,6 +7,9 @@
 //! command: an input control context saying which contexts to add or drop, then a slot context
 //! and endpoint contexts in the same order, one index along. A context is 32 or 64 bytes depending
 //! on the controller (`HCCPARAMS1.CSZ`); only the first 32 carry fields.
+//!
+//! Reach for it when building the input context for Address Device or Configure Endpoint, and
+//! when finding a device's endpoint in its device context.
 
 use crate::port;
 use crate::port::speed;
@@ -99,9 +102,10 @@ pub const fn slot_device_number(context: &[u32; 8]) -> u8 {
 /// (`crate::interrupt_interval`). Three retries on error, which is the specification's suggested
 /// value for everything but isochronous.
 ///
-/// `kind` goes in the three bits of the Endpoint Type field (xHCI 1.2 Table 6-9). Every
-/// [`EndpointType`] code fits them, so nothing spills into the reserved bit, Host Initiate Disable
-/// or Max Burst Size beside it.
+/// `kind` goes in the three bits of the Endpoint Type field (xHCI 1.2 Table 6-9), masked to them,
+/// so nothing spills into the reserved bit, Host Initiate Disable or Max Burst Size beside it.
+/// Every [`EndpointType`] code fits those bits today; the mask keeps the field its width if a code
+/// ever does not.
 pub const fn endpoint(
     kind: EndpointType,
     maximum_packet: u16,
@@ -118,7 +122,7 @@ pub const fn endpoint(
     };
     [
         (interval as u32) << 16,
-        3 << 1 | (kind as u32) << 3 | (maximum_packet as u32) << 16,
+        3 << 1 | (kind as u32 & 0x7) << 3 | (maximum_packet as u32) << 16,
         dequeue as u32,
         (dequeue >> 32) as u32,
         average_transfer_request_block_bytes as u32 | maximum_service_interval_payload << 16,
