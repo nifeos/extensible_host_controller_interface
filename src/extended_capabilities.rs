@@ -2,6 +2,9 @@
 //! [`Capabilities::extended`](crate::Capabilities::extended), for
 //! [`find_extended`](crate::registers::find_extended) to look for, and [`SupportedProtocol`], the
 //! decoder a driver reaches for to learn which root hub ports are USB 2 and which USB 3.
+//!
+//! Reach for it during bring-up, to find the firmware handoff and to sort the root hub ports by
+//! protocol before resetting any of them.
 
 /// Extended capability id: USB Legacy Support, the firmware handoff (xHCI 1.2 section 7.1).
 pub const LEGACY_SUPPORT_EXTENDED_CAPABILITY_ID: u8 = 1;

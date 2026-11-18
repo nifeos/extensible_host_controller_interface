@@ -5,6 +5,9 @@
 //! `CAPLENGTH` (run, reset, ring bases, then one register set per port at 0x400), the **runtime**
 //! registers at `RTSOFF` (one set per interrupter, from 0x20), and the **doorbell array** at
 //! `DBOFF` (one 32-bit doorbell per device slot, slot 0 being the command ring's).
+//!
+//! Reach for it first: every register access the driver makes takes its offset from here, from
+//! halting and resetting the controller to ringing a doorbell.
 
 /// **Capability Registers Length** (`CAPLENGTH`, xHCI specification), the capability register
 /// whose low byte is how many bytes the capability registers take, so where the operational

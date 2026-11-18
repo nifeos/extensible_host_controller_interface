@@ -4,6 +4,9 @@
 //! read, with a single bit added, **disables the port** and acknowledges every pending change
 //! nobody has looked at yet. So a write is always [`write_value`]: the bits that are safe to write
 //! back, plus the one the caller means.
+//!
+//! Reach for it whenever reading or writing a port status register: on a Port Status Change
+//! Event, to reset a port, and to debounce a connection.
 
 /// Current Connect Status: a device is attached.
 #[doc(alias = "PORTSC.CCS")]

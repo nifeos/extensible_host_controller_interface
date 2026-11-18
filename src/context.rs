@@ -7,6 +7,9 @@
 //! command: an input control context saying which contexts to add or drop, then a slot context
 //! and endpoint contexts in the same order, one index along. A context is 32 or 64 bytes depending
 //! on the controller (`HCCPARAMS1.CSZ`); only the first 32 carry fields.
+//!
+//! Reach for it when building the input context for Address Device or Configure Endpoint, and
+//! when finding a device's endpoint in its device context.
 
 use crate::port;
 use crate::port::speed;

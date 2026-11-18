@@ -7,6 +7,9 @@
 //! controller's scratchpad pages follow and are **not** mapped: the driver writes their physical addresses into
 //! [`SCRATCHPAD_ARRAY`] and never touches them, so a process that cannot read the controller's
 //! private memory cannot be confused by it. The input-output memory management unit (IOMMU) confines the device to the whole region.
+//!
+//! Reach for it only when writing a single-slot boot-keyboard driver that takes this layout as its
+//! own.
 
 /// The device context base address array: one pointer per slot, entry 0 the scratchpad array.
 pub const DEVICE_CONTEXT_ARRAY: u64 = 0;

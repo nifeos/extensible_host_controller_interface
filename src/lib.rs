@@ -78,11 +78,13 @@ pub const CONTROLLER_RESET_TIMEOUT_MILLISECONDS: u64 = 10_000;
 /// `XHCI_CMD_DEFAULT_TIMEOUT`, which it takes from USB 3.2 section 9.2.6.1.
 pub const COMMAND_COMPLETION_TIMEOUT_MILLISECONDS: u64 = 5000;
 
-/// Transfer Request Block (TRB) type codes (xHCI 1.2 Table 6-91).
+/// Transfer Request Block (TRB) type codes (xHCI 1.2 Table 6-91). Reach for them when comparing
+/// [`TransferRequestBlock::kind`] or an [`Event::Other`] type against a named code.
 pub mod transfer_request_block_type;
 
 /// Completion codes (xHCI 1.2 section 6.4.5, Table 6-90): every code the specification defines,
-/// and [`completion::name`] for a transcript.
+/// and [`completion::name`] for a transcript. Reach for them when deciding what a transfer or
+/// command completion event's code means.
 pub mod completion;
 
 #[cfg(test)]
