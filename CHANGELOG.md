@@ -3,6 +3,15 @@
 Dates are UTC. One line per release, what changed and why, so a reader of the diff has the
 sentence beside it.
 
+## 0.1.0-pre.3
+
+- No `Unreleased` section existed, so these lines come from the commits since 0.1.0-pre.2.
+- The `endpoint` builder masks the endpoint type to its three bits again, and its falsification
+  patch drops the mask. Every code fits the field today, so no value changes.
+- Each module says when a driver reaches for it, and the two ring proofs cover only the sizes
+  the constructors accept.
+- The README gives the Kani install command on one line a reader can paste.
+
 ## 0.1.0-pre.2
 
 - Breaking: the nine compile-time overlap checks (the `*_DO_NOT_OVERLAP` constants of `context`,
