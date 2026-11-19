@@ -13,13 +13,14 @@ What a run is:
    not against the stranger.
 4. Record the date on the line below.
 
-Last run: 2026-11-11
+Last run: 2026-11-15
 
-Result of that run: the stranger reached a passing build, 30 unit tests and 2 documentation tests,
-and all 7 Kani proofs in about 90 seconds, from the README alone. The same tests passed at Rust
-1.88, the stated minimum. One falsification patch made its harness fail as the README says. Kani
-0.68.0 was already on the machine, so the run did not test the install steps. It found no false
-claim. It found five places where the README left the reader to guess: the build and test commands,
-how long the proofs take and how to run one, how to run a harness against a patch and revert it,
-whether a passing run's warnings are normal, and how to check the minimum Rust version. The full
-record is in [the run appendix](stranger-test-run-2026-11-11.md).
+Result of that run: a fresh clone, following the README alone, built the crate, passed its unit and
+documentation tests, built the library for all three bare-metal targets, passed the tests at Rust
+1.85, the stated minimum, and ran the fake controller example to four successful control
+transfers. One falsification patch made its harness fail as the README says. It found no gap. Its
+limits: the toolchains and Kani were already installed, so the install steps ran only as a
+separate `cargo install` into an empty cargo home, and Kani ran a few harnesses and not the whole
+`cargo kani` run, so the timing the README gives went unchecked. The record is
+[issue #18](https://github.com/nifeos/extensible_host_controller_interface/issues/18). The
+previous run, which ran every proof, is in [its appendix](stranger-test-run-2026-11-11.md).

@@ -190,6 +190,19 @@ the assertion that the patch breaks. `git checkout -- src` reverts the patch.
 - The TRB builders do not check the 64 KiB rule: a data buffer must not cross a 64 KiB boundary
   (xHCI 1.2 section 6.4.1). `fits_one_transfer_request_block` says whether one does, and the
   caller chains several TRBs for a buffer that crosses one.
+- No run against a controller in silicon is recorded. The host tests and proofs model the
+  controller QEMU presents (`qemu-xhci`), and one port test replays the timing a real controller
+  showed after reset. These have not run on silicon:
+  - the port debounce against devices that bounce;
+  - the legacy support handoff on firmware that holds the basic input/output system (BIOS)
+    semaphore;
+  - a device on a USB 3 root port, and the pairing of that port with its USB 2 twin;
+  - a controller with 64-byte contexts and a nonzero scratchpad count;
+  - an event ring wrap, with the busy bit cleared on each dequeue pointer write;
+  - a command ring wrap through the link TRB;
+  - a stall on endpoint 0, and its recovery through Reset Endpoint and Set Transfer Ring (TR)
+    Dequeue Pointer;
+  - a Supported Protocol capability that defines its own speed ids.
 
 The reference is the xHCI 1.2 specification, chapters 4 to 7.
 
