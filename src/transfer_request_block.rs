@@ -135,32 +135,23 @@ impl TransferRequestBlock {
     /// assert_eq!(TransferRequestBlock::from_le_bytes(bytes), TransferRequestBlock::enable_slot());
     /// ```
     pub const fn to_le_bytes(&self) -> [u8; 16] {
-        let mut bytes = [0; 16];
-        let mut dword = 0;
-        while dword < 4 {
-            let le = self.0[dword].to_le_bytes();
-            let mut byte = 0;
-            while byte < 4 {
-                bytes[dword * 4 + byte] = le[byte];
-                byte += 1;
-            }
-            dword += 1;
-        }
-        bytes
+        let [a, b, c, d] = self.0[0].to_le_bytes();
+        let [e, f, g, h] = self.0[1].to_le_bytes();
+        let [i, j, k, l] = self.0[2].to_le_bytes();
+        let [m, n, o, p] = self.0[3].to_le_bytes();
+        [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p]
     }
 
     /// **A TRB from the sixteen bytes the controller wrote**, each dword little-endian: the
     /// inverse of [`TransferRequestBlock::to_le_bytes`].
     pub const fn from_le_bytes(bytes: [u8; 16]) -> TransferRequestBlock {
-        let mut words = [0; 4];
-        let mut dword = 0;
-        while dword < 4 {
-            let at = dword * 4;
-            words[dword] =
-                u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
-            dword += 1;
-        }
-        TransferRequestBlock(words)
+        let [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p] = bytes;
+        TransferRequestBlock([
+            u32::from_le_bytes([a, b, c, d]),
+            u32::from_le_bytes([e, f, g, h]),
+            u32::from_le_bytes([i, j, k, l]),
+            u32::from_le_bytes([m, n, o, p]),
+        ])
     }
 
     /// (`interrupt_on_completion`, xHCI 1.2 specification section 6.4.1.1) Whether the TRB asks the
