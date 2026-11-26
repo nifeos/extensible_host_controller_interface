@@ -6,7 +6,7 @@
 //! registers at `RTSOFF` (one set per interrupter, from 0x20), and the **doorbell array** at
 //! `DBOFF` (one 32-bit doorbell per device slot, slot 0 being the command ring's).
 //!
-//! Reach for it first: every register access the driver makes takes its offset from here, from
+//! Reach for it first: every register access the caller makes takes its offset from here, from
 //! halting and resetting the controller to ringing a doorbell.
 
 use crate::PortNumber;
@@ -115,7 +115,7 @@ pub const EVENT_RING_SEGMENT_TABLE_SIZE_ENTRIES_REGISTER: u64 = 0x08;
 #[doc(alias = "ERSTBA")]
 pub const EVENT_RING_SEGMENT_TABLE_BASE_PHYSICAL_ADDRESS_REGISTER: u64 = 0x10;
 /// **Event Ring Dequeue Pointer** (`ERDP`, xHCI specification), an interrupter register: the
-/// physical address of the next event the driver will read.
+/// physical address of the next event the caller will read.
 #[doc(alias = "ERDP")]
 pub const EVENT_RING_DEQUEUE_POINTER_REGISTER: u64 = 0x18;
 
@@ -187,7 +187,7 @@ impl Capabilities {
     /// [`STRUCTURAL_PARAMETERS_1_REGISTER`], [`STRUCTURAL_PARAMETERS_2_REGISTER`],
     /// [`CAPABILITY_PARAMETERS_1_REGISTER`], [`DOORBELL_OFFSET_REGISTER`] and
     /// [`RUNTIME_REGISTER_SPACE_OFFSET_REGISTER`]. Total, because every one of them
-    /// is the hardware's word and a value this driver cannot use is caught by whoever uses it.
+    /// is the hardware's word, and a value the caller cannot use is the caller's to refuse.
     pub const fn decode(
         capability_registers_length: u32,
         structural_parameters_1: u32,
@@ -336,7 +336,7 @@ impl Capabilities {
 /// list has no such entry, ends, or leaves `limit` bytes.
 ///
 /// Bounded at 64 hops and by `limit`: the list is a linked list in a device's register file, so a
-/// broken controller must end the walk, not hang the driver that is walking it.
+/// broken controller must end the walk, not hang the caller walking it.
 pub fn find_extended(
     first: u64,
     limit: u64,

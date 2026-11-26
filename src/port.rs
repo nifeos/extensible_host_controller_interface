@@ -97,7 +97,7 @@ pub const fn write_value(port_status_and_control: u32, bits: u32) -> u32 {
 }
 
 /// **Endpoint 0's packet size before the device has said**, by speed (xHCI 1.2 section 4.3): 8 for low
-/// and full speed (a full-speed device may want up to 64, which the driver learns from the first
+/// and full speed (a full-speed device may want up to 64, which the caller learns from the first
 /// eight bytes of its descriptor and fixes with Evaluate Context), 64 for high speed, 512 above.
 /// `None` for a speed id this table does not know.
 pub const fn default_control_packet(speed: PortSpeed) -> Option<u16> {
@@ -289,7 +289,7 @@ mod tests {
     }
 
     /// Run a settle over `timeline` (milliseconds after power, the ports connected from then on),
-    /// reading every step as the driver does: when it stops, and what it last read.
+    /// reading every step as a caller does: when it stops, and what it last read.
     fn settle(timeline: &[(u64, &[u8])]) -> (u64, DebounceVerdict, Connections) {
         let at = |t: u64| {
             ports(
@@ -327,7 +327,7 @@ mod tests {
 
     /// **A plug that bounces as it goes in**: connected, gone 30 ms later, back 30 ms after that.
     /// The port is believed only once the last bounce has held for the stable interval, so the
-    /// driver resets the device after the bounce, not during it.
+    /// caller resets the device after the bounce, not during it.
     #[test]
     fn a_bouncing_connect_is_believed_after_its_last_bounce_holds() {
         let (t, settled, seen) = settle(&[(0, &[3]), (30, &[]), (60, &[3])]);

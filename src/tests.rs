@@ -123,7 +123,7 @@ fn every_full_speed_interval_lands_in_the_specification_range() {
     }
 }
 
-/// **A simulated controller consuming what the driver produces**: it reads from its dequeue
+/// **A simulated controller consuming what the caller produces**: it reads from its dequeue
 /// index while the cycle bit matches its own, follows a link TRB and toggles its cycle when the
 /// link says so (xHCI 1.2 section 4.9.2), and returns what it ran. Three laps of a four-entry
 /// ring, so every wrap and every link is exercised: the controller must run exactly the TRBs
@@ -176,7 +176,7 @@ fn a_simulated_controller_runs_exactly_what_was_produced_across_laps() {
             run(&memory, &mut dequeue, &mut consumer_cycle_state),
             produced
         );
-        // Where the controller stopped is where the driver will write next.
+        // Where the controller stopped is where the caller will write next.
         assert_eq!(ring.dequeue_pointer() & !1, base + u64::from(dequeue) * 16);
         assert_eq!(ring.dequeue_pointer() & 1 != 0, consumer_cycle_state);
     }
@@ -185,7 +185,7 @@ fn a_simulated_controller_runs_exactly_what_was_produced_across_laps() {
 /// **The three shapes of a control transfer**, as a controller reads them: the setup stage's
 /// transfer type must agree with the data stage's direction, and the status stage flows the
 /// other way (xHCI 1.2 section 4.11.2.2). Only the status stage asks for an event on success,
-/// which is what the driver waits for; the data stage asks only on a short packet.
+/// which is what the caller waits for; the data stage asks only on a short packet.
 #[test]
 fn control_transfers_agree_on_direction_in_all_three_shapes() {
     for (shape, data_in, transfer_type, status_in) in [
@@ -290,7 +290,7 @@ fn every_command_decodes_back_to_its_slot_endpoint_and_pointer() {
             0x7001
         )
     );
-    // An event type this driver does not act on decodes as itself, never as a known one.
+    // An event type the crate does not decode decodes as itself, never as a known one.
     assert_eq!(
         Event::decode(TransferRequestBlock([0, 0, 0, 37 << 10])),
         Event::Other { kind: 37 }

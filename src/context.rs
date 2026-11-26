@@ -1,9 +1,9 @@
-//! **Slot and endpoint contexts** (xHCI 1.2 section 6.2): what the driver tells the controller about a
+//! **Slot and endpoint contexts** (xHCI 1.2 section 6.2): what the caller tells the controller about a
 //! device and its endpoints.
 //!
 //! A *device context* is an array of contexts the controller owns once a device is addressed: the
 //! slot context, then one endpoint context per device context index (DCI), where endpoint 0 is DCI 1,
-//! endpoint `n` `OUT` is `2n` and `IN` is `2n + 1`. An *input context* is what the driver hands a
+//! endpoint `n` `OUT` is `2n` and `IN` is `2n + 1`. An *input context* is what the caller hands a
 //! command: an input control context saying which contexts to add or drop, then a slot context
 //! and endpoint contexts in the same order, one index along. A context is 32 or 64 bytes depending
 //! on the controller (`HCCPARAMS1.CSZ`); only the first 32 carry fields.
@@ -230,7 +230,7 @@ mod tests {
 
     /// **Drop flags first, add flags second** (xHCI 1.2 section 6.2.5.1): the controller reads
     /// dword 0 as the contexts to drop, so swapping them would ask Configure Endpoint to remove
-    /// the endpoint the driver meant to add.
+    /// the endpoint the caller meant to add.
     #[test]
     fn the_input_control_context_puts_drop_before_add() {
         assert_eq!(input_control(0b11, 0b100), [0b100, 0b11, 0, 0, 0, 0, 0, 0]);

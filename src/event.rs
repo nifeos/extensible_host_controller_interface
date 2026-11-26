@@ -4,14 +4,14 @@
 
 use super::*;
 
-/// **One event, decoded.** The fields a driver uses, by event type.
+/// **One event, decoded.** The fields a caller uses, by event type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum Event {
     /// A transfer finished (or failed).
     #[non_exhaustive]
     Transfer {
-        /// The physical address of the TRB it was about. That holds only while the driver issues
+        /// The physical address of the TRB it was about. That holds only while the caller issues
         /// no Event Data TRBs: for one of those the controller sets the Event Data bit (bit 2 of
         /// the last dword, xHCI 1.2 section 6.4.2.1) and puts the Event Data TRB's value here
         /// instead, and this decoder does not read that bit. The crate builds no Event Data TRB.
@@ -37,13 +37,13 @@ pub enum Event {
         /// field reads 0: a command that names no slot, or an Enable Slot the controller refused.
         slot: Option<SlotId>,
     },
-    /// A port's status changed: the driver reads `PORTSC` to learn how.
+    /// A port's status changed: the caller reads `PORTSC` to learn how.
     #[non_exhaustive]
     PortStatus {
         /// The port, or `None` when the field reads 0, the reserved port number.
         port: Option<PortNumber>,
     },
-    /// Any other event type, which this driver does not act on.
+    /// Any other event type, which this crate does not decode.
     #[non_exhaustive]
     Other {
         /// Its type code.

@@ -1,9 +1,9 @@
 #![no_std]
 #![forbid(unsafe_code)]
 //! **The extensible host controller interface (xHCI), as pure logic**: everything a USB host
-//! controller driver computes, with nothing it touches. A kernel finds and confines the register
-//! file and direct memory access (DMA) memory and a user-space driver drives them; this is the
-//! arithmetic between.
+//! controller driver computes, with nothing it touches. The caller maps the register file and the
+//! direct memory access (DMA) memory and performs every access to them; this is the arithmetic
+//! between.
 //!
 //! [`registers`] and [`Capabilities`] name the registers; a Transfer Request Block (TRB, [`TransferRequestBlock`]), [`Event`], [`ProducerRing`] and
 //! [`EventRing`] are the ring discipline (xHCI 1.2, chapters 4 and 6); [`context`] holds slot and

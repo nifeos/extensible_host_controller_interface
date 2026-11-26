@@ -1,10 +1,10 @@
-//! **The rings**: the producer rings the driver fills and the event ring it drains.
+//! **The rings**: the producer rings the caller fills and the event ring it drains.
 //!
 //! Reach for them to know where the next TRB goes, when to write a link, and which event is next.
 
 use super::*;
 
-/// **A ring the driver produces into**: the command ring and every transfer ring. Its last entry is
+/// **A ring the caller produces into**: the command ring and every transfer ring. Its last entry is
 /// always a link TRB back to the first.
 ///
 /// # Examples
@@ -51,7 +51,7 @@ pub struct ProducerRing {
 /// **What [`ProducerRing::try_enqueue`] says to write**: the TRB at `index`, stamped with this lap's
 /// cycle, and when the ring has just filled its lap, the link TRB at the last index too.
 ///
-/// The driver writes `transfer_request_block` and then `link`, each with the cycle dword last: until
+/// The caller writes `transfer_request_block` and then `link`, each with the cycle dword last: until
 /// a TRB's cycle bit matches, the controller treats it as not yet produced, so the dword that
 /// carries it goes in after the rest. [`ProducerRing::try_enqueue`] states the order and the
 /// barriers.

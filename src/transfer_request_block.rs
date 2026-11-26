@@ -1,4 +1,4 @@
-//! **One Transfer Request Block (TRB)** and the builders for the TRBs the driver writes.
+//! **One Transfer Request Block (TRB)** and the builders for the TRBs a caller writes.
 //!
 //! Reach for it to build each command and transfer before placing it on a producer ring.
 
