@@ -16,12 +16,15 @@
 //! Decode the capability registers, then place a TRB on a command ring:
 //!
 //! ```
-//! use extensible_host_controller_interface::{Capabilities, ProducerRing, TransferRequestBlock};
+//! use extensible_host_controller_interface::{
+//!     Capabilities, PortNumber, ProducerRing, TransferRequestBlock,
+//! };
 //!
 //! // QEMU's qemu-xhci: 0x40 bytes of capability registers, 64 slots, 16 interrupters and 8
 //! // ports, runtime at 0x1000, doorbells at 0x2000.
 //! let capabilities = Capabilities::decode(0x0100_0040, 0x0800_1040, 0, 0x0000_7000, 0x2000, 0x1000);
-//! assert_eq!(capabilities.port_status_and_control(1), Some(0x440));
+//! let port_1 = PortNumber::new(1).unwrap();
+//! assert_eq!(capabilities.port_status_and_control(port_1), Some(0x440));
 //! assert_eq!(capabilities.doorbell(0), 0x2000);
 //!
 //! // A four-entry command ring: three usable slots, then a link TRB back to the first.
@@ -41,7 +44,7 @@
 //!
 //! - One page size: [`direct_memory_access`] assumes 4 KiB (`PAGESIZE` bit 0), and the driver refuses otherwise.
 //! - No streams, isochronous or bulk: the TRBs a keyboard needs and nothing more.
-//! - Speeds are the default ids in [`port::speed`]: a controller whose
+//! - Speeds are the default ids, the associated constants of [`PortSpeed`]: a controller whose
 //!   [`extended_capabilities::SupportedProtocol::speed_id_count`] is not 0 defines its own, and
 //!   nothing here decodes its Protocol Speed ID dwords.
 //! - Hubs are not modeled (route string 0), so a device behind a hub cannot be addressed.
@@ -91,11 +94,13 @@ pub mod completion;
 mod tests;
 
 mod event;
+mod identity;
 mod ring;
 mod transfer_request_block;
 
 pub use context::interrupt_interval;
 pub use event::Event;
+pub use identity::{DeviceContextIndex, PortNumber, PortSpeed, SlotId};
 pub use ring::{EventRing, ProducerRing, TransferRequestBlockPlacement};
 pub use transfer_request_block::{
     Direction, TransferRequestBlock, TransferType, fits_one_transfer_request_block,

@@ -83,23 +83,11 @@ pub(crate) const PRESERVED_FIELDS_DO_NOT_OVERLAP: () = assert!(
         == PRESERVE
 );
 
-/// Port speed ids, the default ones every xHCI uses (xHCI 1.2 Table 7-13).
-pub mod speed {
-    /// Full speed, 12 Mb/s: most keyboards.
-    pub const FULL: u8 = 1;
-    /// Low speed, 1.5 Mb/s: cheap keyboards.
-    pub const LOW: u8 = 2;
-    /// High speed, 480 Mb/s.
-    pub const HIGH: u8 = 3;
-    /// `SuperSpeed`, 5 Gb/s.
-    pub const SUPER: u8 = 4;
-    /// `SuperSpeedPlus`, 10 Gb/s.
-    pub const SUPER_PLUS: u8 = 5;
-}
+use crate::PortSpeed;
 
-/// The attached device's speed id, from bits 13:10.
-pub const fn speed_of(port_status_and_control: u32) -> u8 {
-    ((port_status_and_control >> 10) & 0xf) as u8
+/// The attached device's speed id, from bits 13:10, or `None` when they read 0: no device.
+pub const fn speed_of(port_status_and_control: u32) -> Option<PortSpeed> {
+    PortSpeed::new(((port_status_and_control >> 10) & 0xf) as u8)
 }
 
 /// **What to write to set `bits`** without disabling the port or acknowledging a change nobody
@@ -112,23 +100,23 @@ pub const fn write_value(port_status_and_control: u32, bits: u32) -> u32 {
 /// and full speed (a full-speed device may want up to 64, which the driver learns from the first
 /// eight bytes of its descriptor and fixes with Evaluate Context), 64 for high speed, 512 above.
 /// `None` for a speed id this table does not know.
-pub const fn default_control_packet(speed: u8) -> Option<u16> {
+pub const fn default_control_packet(speed: PortSpeed) -> Option<u16> {
     match speed {
-        speed::LOW | speed::FULL => Some(8),
-        speed::HIGH => Some(64),
-        speed::SUPER | speed::SUPER_PLUS => Some(512),
+        PortSpeed::LOW | PortSpeed::FULL => Some(8),
+        PortSpeed::HIGH => Some(64),
+        PortSpeed::SUPER | PortSpeed::SUPER_PLUS => Some(512),
         _ => None,
     }
 }
 
 /// The name a bench transcript prints for a speed id.
-pub const fn speed_name(speed: u8) -> &'static str {
+pub const fn speed_name(speed: PortSpeed) -> &'static str {
     match speed {
-        speed::LOW => "low speed",
-        speed::FULL => "full speed",
-        speed::HIGH => "high speed",
-        speed::SUPER => "SuperSpeed",
-        speed::SUPER_PLUS => "SuperSpeedPlus",
+        PortSpeed::LOW => "low speed",
+        PortSpeed::FULL => "full speed",
+        PortSpeed::HIGH => "high speed",
+        PortSpeed::SUPER => "SuperSpeed",
+        PortSpeed::SUPER_PLUS => "SuperSpeedPlus",
         _ => "an unknown speed",
     }
 }
@@ -225,7 +213,8 @@ mod tests {
         assert_eq!(w & CHANGES, 0);
         assert_ne!(w & POWER, 0);
         assert_ne!(w & RESET, 0);
-        assert_eq!(speed_of(read), speed::HIGH);
+        assert_eq!(speed_of(read), Some(PortSpeed::HIGH));
+        assert_eq!(speed_of(CONNECTED | POWER), None);
     }
 
     /// Each speed id names itself in the boot line, and an id no table knows says so rather than
@@ -233,12 +222,12 @@ mod tests {
     #[test]
     fn every_speed_has_its_own_name() {
         let names = [
-            speed::LOW,
-            speed::FULL,
-            speed::HIGH,
-            speed::SUPER,
-            speed::SUPER_PLUS,
-            15,
+            PortSpeed::LOW,
+            PortSpeed::FULL,
+            PortSpeed::HIGH,
+            PortSpeed::SUPER,
+            PortSpeed::SUPER_PLUS,
+            PortSpeed::new(15).unwrap(),
         ]
         .map(speed_name);
         assert_eq!(names[1], "full speed");
@@ -283,11 +272,11 @@ mod tests {
 
     #[test]
     fn endpoint_zero_starts_at_the_speeds_minimum() {
-        assert_eq!(default_control_packet(speed::LOW), Some(8));
-        assert_eq!(default_control_packet(speed::FULL), Some(8));
-        assert_eq!(default_control_packet(speed::HIGH), Some(64));
-        assert_eq!(default_control_packet(speed::SUPER), Some(512));
-        assert_eq!(default_control_packet(0), None);
+        assert_eq!(default_control_packet(PortSpeed::LOW), Some(8));
+        assert_eq!(default_control_packet(PortSpeed::FULL), Some(8));
+        assert_eq!(default_control_packet(PortSpeed::HIGH), Some(64));
+        assert_eq!(default_control_packet(PortSpeed::SUPER), Some(512));
+        assert_eq!(default_control_packet(PortSpeed::new(6).unwrap()), None);
     }
 
     fn ports(numbers: &[u8]) -> Connections {

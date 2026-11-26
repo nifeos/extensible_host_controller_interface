@@ -4,6 +4,16 @@ extern crate std;
 use super::*;
 use crate::transfer_request_block::*;
 
+/// Slot `n`, for a test that knows `n` is not 0.
+fn slot_id(n: u8) -> SlotId {
+    SlotId::new(n).unwrap()
+}
+
+/// Device context index `n`, for a test that knows `n` is 1 to 31.
+fn index(n: u8) -> DeviceContextIndex {
+    DeviceContextIndex::new(n).unwrap()
+}
+
 #[test]
 fn events_decode_by_type() {
     // A command completion for Enable Slot, success, slot 1.
@@ -13,7 +23,7 @@ fn events_decode_by_type() {
         Event::Command {
             transfer_request_block: 0x1000,
             code: completion::SUCCESS,
-            slot: 1
+            slot: Some(slot_id(1))
         }
     );
     // A transfer event on endpoint 3 (EP1 IN), short by 2.
@@ -24,12 +34,17 @@ fn events_decode_by_type() {
             transfer_request_block: 0x7000,
             residual: 2,
             code: completion::SHORT_PACKET,
-            slot: 1,
-            endpoint: 3
+            slot: Some(slot_id(1)),
+            endpoint: Some(index(3))
         }
     );
     let t = TransferRequestBlock([5 << 24, 0, 1 << 24, 34 << 10 | 1]);
-    assert_eq!(Event::decode(t), Event::PortStatus { port: 5 });
+    assert_eq!(
+        Event::decode(t),
+        Event::PortStatus {
+            port: PortNumber::new(5)
+        }
+    );
     // A TRB above 4 GiB keeps its high half.
     let t = TransferRequestBlock([0x1000, 0x2, 1 << 24, 33 << 10 | 1 << 24 | 1]);
     assert!(matches!(
@@ -85,14 +100,14 @@ fn a_setup_transfer_request_block_carries_the_packet_and_the_transfer_type() {
 #[test]
 fn the_interval_field_follows_the_speed() {
     // Full speed, 10 ms: 80 microframes, so 2^6 = 64 is the largest period not over it.
-    assert_eq!(interrupt_interval(port::speed::FULL, 10), 6);
-    assert_eq!(interrupt_interval(port::speed::LOW, 1), 3);
-    assert_eq!(interrupt_interval(port::speed::FULL, 255), 10);
-    assert_eq!(interrupt_interval(port::speed::FULL, 0), 3);
+    assert_eq!(interrupt_interval(PortSpeed::FULL, 10), 6);
+    assert_eq!(interrupt_interval(PortSpeed::LOW, 1), 3);
+    assert_eq!(interrupt_interval(PortSpeed::FULL, 255), 10);
+    assert_eq!(interrupt_interval(PortSpeed::FULL, 0), 3);
     // High speed states an exponent plus one.
-    assert_eq!(interrupt_interval(port::speed::HIGH, 4), 3);
-    assert_eq!(interrupt_interval(port::speed::HIGH, 0), 0);
-    assert_eq!(interrupt_interval(port::speed::SUPER, 200), 15);
+    assert_eq!(interrupt_interval(PortSpeed::HIGH, 4), 3);
+    assert_eq!(interrupt_interval(PortSpeed::HIGH, 0), 0);
+    assert_eq!(interrupt_interval(PortSpeed::SUPER, 200), 15);
 }
 
 /// Every full-speed `bInterval` gives an exponent from 3 to 10 whose period does not exceed it
@@ -100,7 +115,7 @@ fn the_interval_field_follows_the_speed() {
 #[test]
 fn every_full_speed_interval_lands_in_the_specification_range() {
     for descriptor_interval in 0..=u8::MAX {
-        let field = interrupt_interval(port::speed::FULL, descriptor_interval);
+        let field = interrupt_interval(PortSpeed::FULL, descriptor_interval);
         let microframes = u32::from(descriptor_interval.max(1)) * 8;
         assert!((3..=10).contains(&field), "{descriptor_interval}");
         assert!(1u32 << field <= microframes, "{descriptor_interval}");
@@ -233,11 +248,11 @@ fn every_command_decodes_back_to_its_slot_endpoint_and_pointer() {
         (transfer_request_block_type::ENABLE_SLOT, 0, 0, 0)
     );
     assert_eq!(
-        decode(TransferRequestBlock::disable_slot(7)),
+        decode(TransferRequestBlock::disable_slot(slot_id(7))),
         (transfer_request_block_type::DISABLE_SLOT, 7, 0, 0)
     );
     assert_eq!(
-        decode(TransferRequestBlock::address_device(0x5000, 1)),
+        decode(TransferRequestBlock::address_device(0x5000, slot_id(1))),
         (
             transfer_request_block_type::DEVICE_ADDRESSING_COMMAND,
             1,
@@ -246,7 +261,7 @@ fn every_command_decodes_back_to_its_slot_endpoint_and_pointer() {
         )
     );
     assert_eq!(
-        decode(TransferRequestBlock::configure_endpoint(0x5000, 2)),
+        decode(TransferRequestBlock::configure_endpoint(0x5000, slot_id(2))),
         (
             transfer_request_block_type::CONFIGURE_ENDPOINT,
             2,
@@ -255,15 +270,19 @@ fn every_command_decodes_back_to_its_slot_endpoint_and_pointer() {
         )
     );
     assert_eq!(
-        decode(TransferRequestBlock::evaluate_context(0x5000, 3)),
+        decode(TransferRequestBlock::evaluate_context(0x5000, slot_id(3))),
         (transfer_request_block_type::EVALUATE_CONTEXT, 3, 0, 0x5000)
     );
     assert_eq!(
-        decode(TransferRequestBlock::reset_endpoint(1, 3)),
+        decode(TransferRequestBlock::reset_endpoint(slot_id(1), index(3))),
         (transfer_request_block_type::RESET_ENDPOINT, 1, 3, 0)
     );
     assert_eq!(
-        decode(TransferRequestBlock::set_dequeue(0x7001, 1, 3)),
+        decode(TransferRequestBlock::set_dequeue(
+            0x7001,
+            slot_id(1),
+            index(3)
+        )),
         (
             transfer_request_block_type::SET_TRANSFER_RING_DEQUEUE_POINTER,
             1,
@@ -367,16 +386,50 @@ fn each_endpoint_type_writes_its_own_code() {
     }
 }
 
-/// **A device context index above 31 stays in the five-bit Endpoint ID** of Reset Endpoint and
-/// Set TR Dequeue Pointer (xHCI 1.2 sections 6.4.3.7 and 6.4.3.9): bits 21 to 23 read zero.
+/// **No device context index leaves the five-bit Endpoint ID** of Reset Endpoint and Set TR
+/// Dequeue Pointer (xHCI 1.2 sections 6.4.3.7 and 6.4.3.9): 32 is refused before a builder sees
+/// it, and the largest, 31, fills the field with bits 21 to 23 still zero.
 #[test]
 fn an_endpoint_index_above_thirty_one_stays_in_its_field() {
+    assert_eq!(DeviceContextIndex::new(32), None);
+    assert_eq!(DeviceContextIndex::new(0), None);
     for built in [
-        TransferRequestBlock::reset_endpoint(1, 0xff),
-        TransferRequestBlock::set_dequeue(0x1000, 1, 0xff),
+        TransferRequestBlock::reset_endpoint(slot_id(1), index(31)),
+        TransferRequestBlock::set_dequeue(0x1000, slot_id(1), index(31)),
     ] {
         assert_eq!(built.0[3] >> 16 & 0xff, 0x1f);
     }
+}
+
+/// **Each number refuses the values the specification reserves**, and gives back the rest.
+#[test]
+fn each_identity_refuses_its_reserved_values() {
+    assert_eq!(SlotId::new(0), None);
+    assert_eq!(SlotId::new(255).map(SlotId::get), Some(255));
+    assert_eq!(
+        DeviceContextIndex::new(1).map(DeviceContextIndex::get),
+        Some(1)
+    );
+    assert_eq!(
+        DeviceContextIndex::new(31).map(DeviceContextIndex::get),
+        Some(31)
+    );
+    assert_eq!(PortNumber::new(0), None);
+    assert_eq!(PortNumber::new(255).map(PortNumber::get), Some(255));
+    assert_eq!(PortSpeed::new(0), None);
+    assert_eq!(PortSpeed::new(16), None);
+    assert_eq!(PortSpeed::new(15).map(PortSpeed::get), Some(15));
+    assert_eq!(
+        [
+            PortSpeed::FULL,
+            PortSpeed::LOW,
+            PortSpeed::HIGH,
+            PortSpeed::SUPER,
+            PortSpeed::SUPER_PLUS
+        ]
+        .map(PortSpeed::get),
+        [1, 2, 3, 4, 5]
+    );
 }
 
 /// **Every completion code has its specification name** (xHCI 1.2 Table 6-90): the 36 defined

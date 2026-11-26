@@ -18,10 +18,11 @@ pub enum Event {
         residual: u32,
         /// The completion code.
         code: u8,
-        /// The device slot.
-        slot: u8,
-        /// The endpoint's device context index (1 for endpoint 0).
-        endpoint: u8,
+        /// The device slot, or `None` when the field reads 0, the reserved slot id.
+        slot: Option<SlotId>,
+        /// The endpoint's device context index (1 for endpoint 0), or `None` when the field reads
+        /// 0, which names no endpoint.
+        endpoint: Option<DeviceContextIndex>,
     },
     /// A command finished.
     Command {
@@ -29,13 +30,14 @@ pub enum Event {
         transfer_request_block: u64,
         /// The completion code.
         code: u8,
-        /// The slot it concerns: for Enable Slot, the slot the controller chose.
-        slot: u8,
+        /// The slot it concerns: for Enable Slot, the slot the controller chose. `None` when the
+        /// field reads 0: a command that names no slot, or an Enable Slot the controller refused.
+        slot: Option<SlotId>,
     },
     /// A port's status changed: the driver reads `PORTSC` to learn how.
     PortStatus {
-        /// The port, numbered from 1.
-        port: u8,
+        /// The port, or `None` when the field reads 0, the reserved port number.
+        port: Option<PortNumber>,
     },
     /// Any other event type, which this driver does not act on.
     Other {
@@ -62,14 +64,14 @@ impl Event {
         let words = transfer_request_block.0;
         let pointer = words[0] as u64 | (words[1] as u64) << 32;
         let code = (words[2] >> 24) as u8;
-        let slot = (words[3] >> 24) as u8;
+        let slot = SlotId::new((words[3] >> 24) as u8);
         match transfer_request_block.kind() {
             transfer_request_block_type::TRANSFER_EVENT => Event::Transfer {
                 transfer_request_block: pointer,
                 residual: words[2] & 0x00ff_ffff,
                 code,
                 slot,
-                endpoint: ((words[3] >> 16) & 0x1f) as u8,
+                endpoint: DeviceContextIndex::new(((words[3] >> 16) & 0x1f) as u8),
             },
             transfer_request_block_type::COMMAND_COMPLETION => Event::Command {
                 transfer_request_block: pointer,
@@ -77,7 +79,7 @@ impl Event {
                 slot,
             },
             transfer_request_block_type::PORT_STATUS_CHANGE => Event::PortStatus {
-                port: (words[0] >> 24) as u8,
+                port: PortNumber::new((words[0] >> 24) as u8),
             },
             kind => Event::Other { kind },
         }

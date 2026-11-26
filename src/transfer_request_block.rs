@@ -212,81 +212,85 @@ impl TransferRequestBlock {
     }
 
     /// Disable Slot `slot`: give it back.
-    pub const fn disable_slot(slot: u8) -> TransferRequestBlock {
+    pub const fn disable_slot(slot: SlotId) -> TransferRequestBlock {
         TransferRequestBlock([
             0,
             0,
             0,
-            control(transfer_request_block_type::DISABLE_SLOT) | (slot as u32) << 24,
+            control(transfer_request_block_type::DISABLE_SLOT) | (slot.get() as u32) << 24,
         ])
     }
 
     /// (`address_device`, xHCI 1.2 specification section 4.6.5) Address Device: take the input
     /// context at `input` (physical) for `slot`, and send the device its address.
     #[doc(alias = "Address Device command")]
-    pub const fn address_device(input: u64, slot: u8) -> TransferRequestBlock {
+    pub const fn address_device(input: u64, slot: SlotId) -> TransferRequestBlock {
         TransferRequestBlock::pointer(
             input,
             [
                 0,
                 control(transfer_request_block_type::DEVICE_ADDRESSING_COMMAND)
-                    | (slot as u32) << 24,
+                    | (slot.get() as u32) << 24,
             ],
         )
     }
 
     /// Configure Endpoint: add the endpoints the input context's add flags name.
-    pub const fn configure_endpoint(input: u64, slot: u8) -> TransferRequestBlock {
+    pub const fn configure_endpoint(input: u64, slot: SlotId) -> TransferRequestBlock {
         TransferRequestBlock::pointer(
             input,
             [
                 0,
-                control(transfer_request_block_type::CONFIGURE_ENDPOINT) | (slot as u32) << 24,
+                control(transfer_request_block_type::CONFIGURE_ENDPOINT)
+                    | (slot.get() as u32) << 24,
             ],
         )
     }
 
     /// Evaluate Context: update the fields the input context names (here, endpoint 0's packet
     /// size once the device has said what it is).
-    pub const fn evaluate_context(input: u64, slot: u8) -> TransferRequestBlock {
+    pub const fn evaluate_context(input: u64, slot: SlotId) -> TransferRequestBlock {
         TransferRequestBlock::pointer(
             input,
             [
                 0,
-                control(transfer_request_block_type::EVALUATE_CONTEXT) | (slot as u32) << 24,
+                control(transfer_request_block_type::EVALUATE_CONTEXT) | (slot.get() as u32) << 24,
             ],
         )
     }
 
-    /// Reset Endpoint `device_context_index` of `slot`, after a stall halted it. The index keeps
-    /// to the five bits of the Endpoint ID field (xHCI 1.2 section 6.4.3.7).
-    pub const fn reset_endpoint(slot: u8, device_context_index: u8) -> TransferRequestBlock {
+    /// Reset Endpoint `device_context_index` of `slot`, after a stall halted it. The index is at
+    /// most 31, so it keeps to the five bits of the Endpoint ID field (xHCI 1.2 section 6.4.3.7).
+    pub const fn reset_endpoint(
+        slot: SlotId,
+        device_context_index: DeviceContextIndex,
+    ) -> TransferRequestBlock {
         TransferRequestBlock([
             0,
             0,
             0,
             control(transfer_request_block_type::RESET_ENDPOINT)
-                | (device_context_index as u32 & 0x1f) << 16
-                | (slot as u32) << 24,
+                | (device_context_index.get() as u32) << 16
+                | (slot.get() as u32) << 24,
         ])
     }
 
     /// Set TR Dequeue Pointer of endpoint `device_context_index` of `slot` to `pointer` (the ring
     /// position with the consumer cycle in bit 0, [`ProducerRing::dequeue_pointer`]), skipping
-    /// what a stall left on the ring. The index keeps to the five bits of the Endpoint ID field
-    /// (xHCI 1.2 section 6.4.3.9).
+    /// what a stall left on the ring. The index is at most 31, so it keeps to the five bits of the
+    /// Endpoint ID field (xHCI 1.2 section 6.4.3.9).
     pub const fn set_dequeue(
         pointer: u64,
-        slot: u8,
-        device_context_index: u8,
+        slot: SlotId,
+        device_context_index: DeviceContextIndex,
     ) -> TransferRequestBlock {
         TransferRequestBlock::pointer(
             pointer,
             [
                 0,
                 control(transfer_request_block_type::SET_TRANSFER_RING_DEQUEUE_POINTER)
-                    | (device_context_index as u32 & 0x1f) << 16
-                    | (slot as u32) << 24,
+                    | (device_context_index.get() as u32) << 16
+                    | (slot.get() as u32) << 24,
             ],
         )
     }

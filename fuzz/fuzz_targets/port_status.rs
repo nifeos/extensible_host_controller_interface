@@ -11,6 +11,7 @@
 
 #![no_main]
 
+use extensible_host_controller_interface::PortSpeed;
 use extensible_host_controller_interface::context::slot_device_number;
 use extensible_host_controller_interface::port::{
     CHANGES, CONNECTED, Connections, DEBOUNCE_STABLE_MILLISECONDS, DEBOUNCE_TIMEOUT_MILLISECONDS,
@@ -26,13 +27,18 @@ fn dword(bytes: &[u8]) -> u32 {
 /// Hold everything a driver derives from one `PORTSC` read.
 fn check_port_status(port_status: u32) {
     let speed = speed_of(port_status);
-    assert!(speed < 16, "the speed id is four bits");
-    assert_eq!(u32::from(speed), (port_status >> 10) & 0xf);
-    assert!(matches!(
-        default_control_packet(speed),
-        None | Some(8) | Some(64) | Some(512)
-    ));
-    assert!(!speed_name(speed).is_empty());
+    assert_eq!(
+        u32::from(speed.map_or(0, PortSpeed::get)),
+        (port_status >> 10) & 0xf,
+        "the speed id is four bits, and 0 is no device"
+    );
+    if let Some(speed) = speed {
+        assert!(matches!(
+            default_control_packet(speed),
+            None | Some(8) | Some(64) | Some(512)
+        ));
+        assert!(!speed_name(speed).is_empty());
+    }
 
     // Writing nothing, or any one bit a driver sets, carries no change bit and no Port Enabled
     // bit unless that is the bit asked for, and keeps the preserved bits as read.

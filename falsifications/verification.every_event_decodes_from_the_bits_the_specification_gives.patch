@@ -7,12 +7,12 @@ Expected to fail: the harness's check that the endpoint is the five bits at 16 t
 diff --git a/src/event.rs b/src/event.rs
 --- a/src/event.rs
 +++ b/src/event.rs
-@@ -64,7 +64,7 @@
+@@ -71,7 +71,7 @@ impl Event {
                  residual: words[2] & 0x00ff_ffff,
                  code,
                  slot,
--                endpoint: ((words[3] >> 16) & 0x1f) as u8,
-+                endpoint: ((words[3] >> 16) & 0x3f) as u8,
+-                endpoint: DeviceContextIndex::new(((words[3] >> 16) & 0x1f) as u8),
++                endpoint: DeviceContextIndex::new(((words[3] >> 16) & 0x3f) as u8),
              },
              transfer_request_block_type::COMMAND_COMPLETION => Event::Command {
                  transfer_request_block: pointer,

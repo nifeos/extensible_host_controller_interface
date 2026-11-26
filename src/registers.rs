@@ -9,6 +9,8 @@
 //! Reach for it first: every register access the driver makes takes its offset from here, from
 //! halting and resetting the controller to ringing a doorbell.
 
+use crate::PortNumber;
+
 /// **Capability Registers Length** (`CAPLENGTH`, xHCI specification), the capability register
 /// whose low byte is how many bytes the capability registers take, so where the operational
 /// registers start; the dword read here carries `HCIVERSION` in its high half.
@@ -219,17 +221,17 @@ impl Capabilities {
     }
 
     /// Port `port_number`'s **Port Status and Control** register (`PORTSC`, xHCI 1.2 section
-    /// 5.4.8), as an offset into the register file. Ports count from 1, so `None` for port 0 and
-    /// for a port past [`maximum_ports`](Self::maximum_ports): no such register exists.
+    /// 5.4.8), as an offset into the register file. `None` for a port past
+    /// [`maximum_ports`](Self::maximum_ports): no such register exists.
     #[doc(alias = "PORTSC")]
-    pub const fn port_status_and_control(&self, port_number: u8) -> Option<u64> {
-        if port_number == 0 || port_number > self.maximum_ports {
+    pub const fn port_status_and_control(&self, port_number: PortNumber) -> Option<u64> {
+        if port_number.get() > self.maximum_ports {
             return None;
         }
         Some(
             self.operational
                 + FIRST_PORT_STATUS_AND_CONTROL_REGISTER
-                + 0x10 * (port_number as u64 - 1),
+                + 0x10 * (port_number.get() as u64 - 1),
         )
     }
 
@@ -294,6 +296,10 @@ pub fn find_extended(
 mod tests {
     use super::*;
 
+    fn port(n: u8) -> PortNumber {
+        PortNumber::new(n).unwrap()
+    }
+
     #[test]
     fn qemus_capability_registers_decode() {
         let capabilities =
@@ -306,10 +312,10 @@ mod tests {
         assert_eq!(capabilities.scratchpads, 0);
         assert_eq!(capabilities.context_bytes, 32);
         assert_eq!(capabilities.extended, 0x20); // the dword count in HCCPARAMS1's high half, times four
-        assert_eq!(capabilities.port_status_and_control(1), Some(0x440));
-        assert_eq!(capabilities.port_status_and_control(8), Some(0x4b0));
-        assert_eq!(capabilities.port_status_and_control(0), None);
-        assert_eq!(capabilities.port_status_and_control(9), None);
+        assert_eq!(capabilities.port_status_and_control(port(1)), Some(0x440));
+        assert_eq!(capabilities.port_status_and_control(port(8)), Some(0x4b0));
+        assert_eq!(PortNumber::new(0), None);
+        assert_eq!(capabilities.port_status_and_control(port(9)), None);
         assert_eq!(
             capabilities.interrupter(EVENT_RING_DEQUEUE_POINTER_REGISTER),
             0x1038

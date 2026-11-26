@@ -11,8 +11,7 @@
 //! Reach for it when building the input context for Address Device or Configure Endpoint, and
 //! when finding a device's endpoint in its device context.
 
-use crate::port;
-use crate::port::speed;
+use crate::{DeviceContextIndex, PortNumber, PortSpeed};
 
 /// **The Endpoint Type field of an endpoint context** (xHCI 1.2 Table 6-9), each variant's value
 /// its code. Code 0, Not Valid, has no variant: [`endpoint`] builds only a valid context.
@@ -38,15 +37,18 @@ pub enum EndpointType {
     InterruptIn = 7,
 }
 
-/// **The device context index** of the endpoint with `endpoint_number_and_direction` (direction bit included). Endpoint 0 is 1
-/// in either direction.
-pub const fn endpoint_index(endpoint_number_and_direction: u8) -> u8 {
+/// **The device context index** of the endpoint with `endpoint_number_and_direction`, the
+/// endpoint descriptor's `bEndpointAddress` (direction bit included, bits 4 to 6 reserved and
+/// ignored). Endpoint 0 is 1 in either direction.
+pub const fn endpoint_index(endpoint_number_and_direction: u8) -> DeviceContextIndex {
     let number = endpoint_number_and_direction & 0x0f;
-    if number == 0 {
+    // 1 for endpoint 0, and 2 to 31 for endpoints 1 to 15: never outside the type's range, which
+    // the proof `a_device_context_index_is_one_to_thirty_one_and_distinct` checks.
+    DeviceContextIndex(if number == 0 {
         1
     } else {
         number * 2 + (endpoint_number_and_direction >> 7)
-    }
+    })
 }
 
 /// Byte offset of the input control context's successor `index` in an input context: the slot
@@ -67,12 +69,12 @@ pub const fn input_control(add: u32, drop: u32) -> [u32; 8] {
     [drop, add, 0, 0, 0, 0, 0, 0]
 }
 
-/// **A slot context for a device on root port `port`** (numbered from 1) at `speed`, whose highest
-/// context is DCI `entries`. Route string 0: the device is on a root port, not behind a hub.
-pub const fn slot(speed: u8, port: u8, entries: u8) -> [u32; 8] {
+/// **A slot context for a device on root port `port`** at `speed`, whose highest context is DCI
+/// `entries`. Route string 0: the device is on a root port, not behind a hub.
+pub const fn slot(speed: PortSpeed, port: PortNumber, entries: DeviceContextIndex) -> [u32; 8] {
     [
-        (speed as u32 & 0xf) << 20 | (entries as u32 & 0x1f) << 27,
-        (port as u32) << 16,
+        (speed.get() as u32) << 20 | (entries.get() as u32) << 27,
+        (port.get() as u32) << 16,
         0,
         0,
         0,
@@ -151,8 +153,8 @@ pub const fn control_endpoint(maximum_packet: u16, dequeue: u64) -> [u32; 8] {
 }
 
 /// Whether `speed` is one at which `bMaxPacketSize0` is an exponent.
-pub const fn is_superspeed(speed: u8) -> bool {
-    speed == speed::SUPER || speed == speed::SUPER_PLUS
+pub const fn is_superspeed(speed: PortSpeed) -> bool {
+    speed.get() == PortSpeed::SUPER.get() || speed.get() == PortSpeed::SUPER_PLUS.get()
 }
 
 /// **The `bInterval` of an interrupt endpoint as the xHCI Interval field**, which is an exponent:
@@ -163,8 +165,8 @@ pub const fn is_superspeed(speed: u8) -> bool {
 /// largest exponent whose period does not exceed it. That lands in the specification's 3 (1 ms) to
 /// 10 (128 ms) for every `bInterval`, 0 read as 1. High-speed and `SuperSpeed` devices already state an exponent, plus one (1 to 16),
 /// so the field is that minus one.
-pub const fn interrupt_interval(speed: u8, descriptor_interval: u8) -> u8 {
-    if speed == port::speed::FULL || speed == port::speed::LOW {
+pub const fn interrupt_interval(speed: PortSpeed, descriptor_interval: u8) -> u8 {
+    if speed.get() == PortSpeed::FULL.get() || speed.get() == PortSpeed::LOW.get() {
         let microframes = (if descriptor_interval == 0 {
             1
         } else {
@@ -189,18 +191,22 @@ pub const fn interrupt_interval(speed: u8, descriptor_interval: u8) -> u8 {
 mod tests {
     use super::*;
 
+    fn index(n: u8) -> DeviceContextIndex {
+        DeviceContextIndex::new(n).unwrap()
+    }
+
     #[test]
     fn device_context_indices_interleave_out_and_in() {
-        assert_eq!(endpoint_index(0x00), 1);
-        assert_eq!(endpoint_index(0x80), 1);
-        assert_eq!(endpoint_index(0x01), 2);
-        assert_eq!(endpoint_index(0x81), 3);
-        assert_eq!(endpoint_index(0x8f), 31);
+        assert_eq!(endpoint_index(0x00), index(1));
+        assert_eq!(endpoint_index(0x80), index(1));
+        assert_eq!(endpoint_index(0x01), index(2));
+        assert_eq!(endpoint_index(0x81), index(3));
+        assert_eq!(endpoint_index(0x8f), index(31));
     }
 
     #[test]
     fn a_slot_context_names_its_port_speed_and_reach() {
-        let s = slot(speed::FULL, 5, 3);
+        let s = slot(PortSpeed::FULL, PortNumber::new(5).unwrap(), index(3));
         assert_eq!((s[0] >> 20) & 0xf, 1);
         assert_eq!(s[0] >> 27, 3);
         assert_eq!(s[1] >> 16, 5);
@@ -249,11 +255,11 @@ mod tests {
     #[test]
     fn the_assigned_device_number_and_the_superspeed_test() {
         assert_eq!(slot_device_number(&[0, 0, 0, 0x0800_0005, 0, 0, 0, 0]), 5);
-        assert!(is_superspeed(speed::SUPER) && is_superspeed(speed::SUPER_PLUS));
+        assert!(is_superspeed(PortSpeed::SUPER) && is_superspeed(PortSpeed::SUPER_PLUS));
         assert!(
-            !is_superspeed(speed::HIGH)
-                && !is_superspeed(speed::FULL)
-                && !is_superspeed(speed::LOW)
+            !is_superspeed(PortSpeed::HIGH)
+                && !is_superspeed(PortSpeed::FULL)
+                && !is_superspeed(PortSpeed::LOW)
         );
     }
 

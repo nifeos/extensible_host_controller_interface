@@ -15,13 +15,16 @@ suits a model checker. It does not touch hardware, allocate, or drive a controll
 ## EXAMPLES
 
 ```rust
-use extensible_host_controller_interface::{Capabilities, ProducerRing, TransferRequestBlock};
+use extensible_host_controller_interface::{
+    Capabilities, PortNumber, ProducerRing, TransferRequestBlock,
+};
 
 // QEMU's qemu-xhci: 0x40 bytes of capability registers, 64 slots, 16 interrupters and 8 ports
 // (4 USB 2 and 4 USB 3, the defaults), runtime at 0x1000, doorbells at 0x2000. Port 1's status
 // register and the command ring's doorbell:
 let caps = Capabilities::decode(0x0100_0040, 0x0800_1040, 0, 0x0000_7000, 0x2000, 0x1000);
-assert_eq!((caps.port_status_and_control(1), caps.doorbell(0)), (Some(0x440), 0x2000));
+let port_1 = PortNumber::new(1).unwrap();
+assert_eq!((caps.port_status_and_control(port_1), caps.doorbell(0)), (Some(0x440), 0x2000));
 
 // A four-entry command ring: three usable slots, then a link TRB back to the first.
 let mut ring = ProducerRing::new(0x1000, 4);
@@ -180,7 +183,7 @@ the assertion that the patch breaks. `git checkout -- src` reverts the patch.
 - Hubs are not modeled (route string 0), so the crate cannot address a device behind a hub. Only devices
   on the root ports work.
 - One page size: the DMA layout assumes 4 KiB pages (`PAGESIZE` bit 0).
-- Speeds are the default ids in `port::speed`. A controller whose Supported Protocol capability
+- Speeds are the default ids, the associated constants of `PortSpeed`. A controller whose Supported Protocol capability
   has a speed id count other than 0 defines its own, and the crate does not decode its Protocol
   Speed ID dwords.
 - No streams, isochronous or bulk transfers: the crate builds the TRBs a boot keyboard needs and

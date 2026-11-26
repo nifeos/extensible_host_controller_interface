@@ -1,18 +1,18 @@
 Falsifies `extensible_host_controller_interface::verification::a_slot_context_keeps_each_field_in_its_own_bits`.
 
-The defect: `slot` forgets to mask the speed id to its four bits, so a speed id above 15 spills into the context count and the reserved bits beside it.
+The defect: `slot` puts the speed id one bit low, at 19 to 22, so it reads back halved from its own field and its low bit lands in the reserved bit 19.
 
-Expected to fail: the harness's check that dword 0 holds nothing outside the speed and context count fields, or that the speed reads back masked to four bits.
+Expected to fail: the harness's check that the speed id reads back from bits 20 to 23, or that dword 0 holds nothing outside the speed and context count fields.
 
 diff --git a/src/context.rs b/src/context.rs
 --- a/src/context.rs
 +++ b/src/context.rs
-@@ -49,7 +49,7 @@
- /// context is DCI `entries`. Route string 0: the device is on a root port, not behind a hub.
- pub const fn slot(speed: u8, port: u8, entries: u8) -> [u32; 8] {
+@@ -76,7 +76,7 @@ pub const fn input_control(add: u32, drop: u32) -> [u32; 8] {
+ /// `entries`. Route string 0: the device is on a root port, not behind a hub.
+ pub const fn slot(speed: PortSpeed, port: PortNumber, entries: DeviceContextIndex) -> [u32; 8] {
      [
--        (speed as u32 & 0xf) << 20 | (entries as u32 & 0x1f) << 27,
-+        (speed as u32) << 20 | (entries as u32 & 0x1f) << 27,
-         (port as u32) << 16,
+-        (speed.get() as u32) << 20 | (entries.get() as u32) << 27,
++        (speed.get() as u32) << 19 | (entries.get() as u32) << 27,
+         (port.get() as u32) << 16,
          0,
          0,

@@ -13,8 +13,8 @@
 //! `EventRing::is_ready` describe.
 
 use extensible_host_controller_interface::{
-    Direction, Event, EventRing, ProducerRing, TransferRequestBlock, TransferType, completion,
-    transfer_request_block_type,
+    DeviceContextIndex, Direction, Event, EventRing, ProducerRing, SlotId, TransferRequestBlock,
+    TransferType, completion, context, transfer_request_block_type,
 };
 
 /// Where the fake's physical memory starts, and how many TRBs it holds.
@@ -27,8 +27,8 @@ const EVENT_RING: u64 = MEMORY_BASE + 0x100;
 /// The device's descriptor buffer: outside the TRB memory, since the fake moves no data.
 const DESCRIPTOR_BUFFER: u64 = 0x20_0000;
 /// The device slot and endpoint 0's device context index.
-const SLOT: u8 = 1;
-const ENDPOINT_ZERO: u8 = 1;
+const SLOT: SlotId = SlotId::new(1).unwrap();
+const ENDPOINT_ZERO: DeviceContextIndex = context::endpoint_index(0);
 
 /// The fake's memory: one TRB per 16 bytes from [`MEMORY_BASE`].
 struct Memory(Vec<TransferRequestBlock>);
@@ -84,8 +84,8 @@ impl FakeController {
             pointer as u32,
             (pointer >> 32) as u32,
             u32::from(code) << 24,
-            u32::from(SLOT) << 24
-                | u32::from(ENDPOINT_ZERO) << 16
+            u32::from(SLOT.get()) << 24
+                | u32::from(ENDPOINT_ZERO.get()) << 16
                 | u32::from(transfer_request_block_type::TRANSFER_EVENT) << 10
                 | u32::from(self.event_cycle),
         ]);
@@ -154,11 +154,12 @@ fn main() {
                     endpoint,
                     ..
                 } => {
-                    assert_eq!((slot, endpoint), (SLOT, ENDPOINT_ZERO));
+                    assert_eq!((slot, endpoint), (Some(SLOT), Some(ENDPOINT_ZERO)));
                     assert_eq!(transfer_request_block, status_at);
                     println!(
-                        "round {round}: transfer at {transfer_request_block:#x} on slot {slot} \
+                        "round {round}: transfer at {transfer_request_block:#x} on slot {} \
                          ended with {}",
+                        SLOT.get(),
                         completion::name(code)
                     );
                     assert!(transfers.complete(transfer_request_block));

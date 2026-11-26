@@ -11,7 +11,9 @@
 
 #![no_main]
 
-use extensible_host_controller_interface::{Event, EventRing, TransferRequestBlock};
+use extensible_host_controller_interface::{
+    DeviceContextIndex, Event, EventRing, PortNumber, SlotId, TransferRequestBlock,
+};
 use libfuzzer_sys::fuzz_target;
 
 /// Where the segment sits: a page-aligned address with room for any entry count above it.
@@ -43,8 +45,12 @@ fn check_event(transfer_request_block: TransferRequestBlock) {
             assert!(residual < 1 << 24, "the residual length is 24 bits");
             assert_eq!(residual, words[2] & 0x00ff_ffff);
             assert_eq!(code, (words[2] >> 24) as u8);
-            assert_eq!(slot, (words[3] >> 24) as u8);
-            assert!(endpoint < 32, "the endpoint identifier is five bits");
+            assert_eq!(slot.map_or(0, SlotId::get), (words[3] >> 24) as u8);
+            assert_eq!(
+                endpoint.map_or(0, DeviceContextIndex::get),
+                ((words[3] >> 16) & 0x1f) as u8,
+                "the endpoint identifier is five bits"
+            );
         }
         Event::Command {
             transfer_request_block: address,
@@ -54,11 +60,11 @@ fn check_event(transfer_request_block: TransferRequestBlock) {
             assert_eq!(kind, COMMAND_COMPLETION);
             assert_eq!(address, pointer);
             assert_eq!(code, (words[2] >> 24) as u8);
-            assert_eq!(slot, (words[3] >> 24) as u8);
+            assert_eq!(slot.map_or(0, SlotId::get), (words[3] >> 24) as u8);
         }
         Event::PortStatus { port } => {
             assert_eq!(kind, PORT_STATUS_CHANGE);
-            assert_eq!(port, (words[0] >> 24) as u8);
+            assert_eq!(port.map_or(0, PortNumber::get), (words[0] >> 24) as u8);
         }
         Event::Other { kind: other } => {
             assert_eq!(other, kind);
