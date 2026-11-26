@@ -75,6 +75,30 @@ pub enum TransferType {
     DeviceToHost = 3,
 }
 
+/// **Which way a stage's data flows**, as the Direction field of a Data or Status Stage TRB gives
+/// it (xHCI 1.2 sections 6.4.1.2.2 and 6.4.1.2.3). The names are the USB specification's, which
+/// are the host's point of view.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[doc(alias = "DIR")]
+pub enum Direction {
+    /// Host to device: Direction 0.
+    #[doc(alias = "OUT")]
+    Out,
+    /// Device to host: Direction 1.
+    #[doc(alias = "IN")]
+    In,
+}
+
+impl Direction {
+    /// The Direction field's value: 1 for [`Direction::In`], 0 for [`Direction::Out`].
+    const fn field(self) -> u32 {
+        match self {
+            Direction::Out => 0,
+            Direction::In => 1,
+        }
+    }
+}
+
 pub(crate) const fn control(kind: u8) -> u32 {
     (kind as u32) << 10
 }
@@ -279,30 +303,44 @@ impl TransferRequestBlock {
         ])
     }
 
-    /// A control transfer's Data Stage: `len` bytes at `buffer` (physical). The bytes must not
-    /// cross a 64 KiB boundary ([`fits_one_transfer_request_block`] says whether they do); this
-    /// builder does not check.
-    pub const fn data(buffer: u64, len: u16, inbound: bool) -> TransferRequestBlock {
+    /// A control transfer's Data Stage: `len` bytes at `buffer` (physical), flowing `direction`,
+    /// which agrees with the Setup Stage's [`TransferType`]. The bytes must not cross a 64 KiB
+    /// boundary ([`fits_one_transfer_request_block`] says whether they do); this builder does not
+    /// check.
+    pub const fn data(buffer: u64, len: u16, direction: Direction) -> TransferRequestBlock {
         TransferRequestBlock::pointer(
             buffer,
             [
                 len as u32,
                 control(transfer_request_block_type::DATA)
-                    | (inbound as u32) << 16
+                    | direction.field() << 16
                     | INTERRUPT_ON_SHORT_PACKET,
             ],
         )
     }
 
-    /// A control transfer's Status Stage, which flows opposite to the data stage (device to host
-    /// when there was none, or when it flowed host to device). Asks for the completion event.
-    pub const fn status(data_was_inbound: bool) -> TransferRequestBlock {
+    /// A control transfer's Status Stage, flowing `direction`: opposite to the Data Stage, and
+    /// [`Direction::In`] when there is none (xHCI 1.2 section 4.11.2.2). Asks for the completion
+    /// event.
+    ///
+    /// ```
+    /// use extensible_host_controller_interface::{Direction, TransferRequestBlock, TransferType};
+    ///
+    /// // GET_DESCRIPTOR: the device sends 18 bytes, and the status stage answers host to device.
+    /// let stages = [
+    ///     TransferRequestBlock::setup(0x0012_0000_0100_0680, TransferType::DeviceToHost),
+    ///     TransferRequestBlock::data(0x20_0000, 18, Direction::In),
+    ///     TransferRequestBlock::status(Direction::Out),
+    /// ];
+    /// assert!(stages[2].interrupt_on_completion());
+    /// ```
+    pub const fn status(direction: Direction) -> TransferRequestBlock {
         TransferRequestBlock([
             0,
             0,
             0,
             control(transfer_request_block_type::STATUS)
-                | (!data_was_inbound as u32) << 16
+                | direction.field() << 16
                 | INTERRUPT_ON_COMPLETION,
         ])
     }

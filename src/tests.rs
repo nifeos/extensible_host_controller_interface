@@ -72,8 +72,14 @@ fn a_setup_transfer_request_block_carries_the_packet_and_the_transfer_type() {
     assert_eq!((t.0[3] >> 16) & 3, 3);
     assert!(t.0[3] & IMMEDIATE_DATA != 0);
     // The status stage of an IN transfer flows OUT, and of a no-data transfer flows IN.
-    assert_eq!((TransferRequestBlock::status(true).0[3] >> 16) & 1, 0);
-    assert_eq!((TransferRequestBlock::status(false).0[3] >> 16) & 1, 1);
+    assert_eq!(
+        (TransferRequestBlock::status(Direction::Out).0[3] >> 16) & 1,
+        0
+    );
+    assert_eq!(
+        (TransferRequestBlock::status(Direction::In).0[3] >> 16) & 1,
+        1
+    );
 }
 
 #[test]
@@ -172,14 +178,21 @@ fn control_transfers_agree_on_direction_in_all_three_shapes() {
         (TransferType::HostToDevice, Some(false), 2, true),
         (TransferType::DeviceToHost, Some(true), 3, false),
     ] {
+        let direction = |inbound: bool| {
+            if inbound {
+                Direction::In
+            } else {
+                Direction::Out
+            }
+        };
         let setup = TransferRequestBlock::setup(0, shape);
         assert_eq!((setup.0[3] >> 16) & 3, transfer_type);
-        let status = TransferRequestBlock::status(data_in == Some(true));
+        let status = TransferRequestBlock::status(direction(status_in));
         assert_eq!(status.kind(), transfer_request_block_type::STATUS);
         assert_eq!((status.0[3] >> 16) & 1 != 0, status_in);
         assert!(status.0[3] & INTERRUPT_ON_COMPLETION != 0);
         if let Some(inbound) = data_in {
-            let data = TransferRequestBlock::data(0x1_2345_6000, 18, inbound);
+            let data = TransferRequestBlock::data(0x1_2345_6000, 18, direction(inbound));
             assert_eq!(data.kind(), transfer_request_block_type::DATA);
             assert_eq!((data.0[0], data.0[1], data.0[2]), (0x2345_6000, 1, 18));
             assert_eq!((data.0[3] >> 16) & 1 != 0, inbound);
@@ -528,7 +541,7 @@ fn a_transfer_request_block_round_trips_its_dwords() {
     assert_eq!(TransferRequestBlock::from_dwords(words).dwords(), words);
     assert!(TransferRequestBlock::from_dwords([0, 0, 0, 1 << 5]).interrupt_on_completion());
     assert!(!TransferRequestBlock::from_dwords([!0, !0, !0, !(1 << 5)]).interrupt_on_completion());
-    assert!(TransferRequestBlock::status(false).interrupt_on_completion());
+    assert!(TransferRequestBlock::status(Direction::In).interrupt_on_completion());
     assert!(!TransferRequestBlock::setup(0, TransferType::NoDataStage).interrupt_on_completion());
 }
 

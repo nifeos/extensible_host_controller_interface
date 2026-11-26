@@ -13,7 +13,7 @@
 //! `EventRing::is_ready` describe.
 
 use extensible_host_controller_interface::{
-    Event, EventRing, ProducerRing, TransferRequestBlock, TransferType, completion,
+    Direction, Event, EventRing, ProducerRing, TransferRequestBlock, TransferType, completion,
     transfer_request_block_type,
 };
 
@@ -122,8 +122,8 @@ fn main() {
     for round in 0..4 {
         let stages = [
             TransferRequestBlock::setup(packet, TransferType::DeviceToHost),
-            TransferRequestBlock::data(DESCRIPTOR_BUFFER, 18, true),
-            TransferRequestBlock::status(true),
+            TransferRequestBlock::data(DESCRIPTOR_BUFFER, 18, Direction::In),
+            TransferRequestBlock::status(Direction::Out),
         ];
         let mut status_at = 0;
         for stage in stages {

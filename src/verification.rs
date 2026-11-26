@@ -306,6 +306,11 @@ fn every_command_trb_puts_its_slot_endpoint_and_pointer_in_their_fields() {
     let index: u8 = kani::any();
     let len: u16 = kani::any();
     let inbound: bool = kani::any();
+    let direction = if inbound {
+        Direction::In
+    } else {
+        Direction::Out
+    };
     let type_bits = 0x3f << 10;
     let slot_bits = 0xff << 24;
     let endpoint_bits = 0x1f << 16;
@@ -362,13 +367,13 @@ fn every_command_trb_puts_its_slot_endpoint_and_pointer_in_their_fields() {
     );
 
     for built in [
-        TransferRequestBlock::data(pointer, len, inbound),
+        TransferRequestBlock::data(pointer, len, direction),
         TransferRequestBlock::normal(pointer, len),
     ] {
         assert_eq!(built.0[..3], [lo, hi, len as u32]);
         assert!(!built.is_cycle());
     }
-    let data = TransferRequestBlock::data(pointer, len, inbound);
+    let data = TransferRequestBlock::data(pointer, len, direction);
     assert_eq!(data.kind(), transfer_request_block_type::DATA);
     assert_eq!(data.0[3] >> 16 & 1 != 0, inbound);
     assert_eq!(
