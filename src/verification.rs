@@ -268,7 +268,7 @@ fn every_event_decodes_from_the_bits_the_specification_gives() {
             assert_eq!(kind, transfer_request_block_type::TRANSFER_EVENT);
             assert_eq!(transfer_request_block, pointer);
             assert_eq!(residual, words[2] & 0x00ff_ffff);
-            assert_eq!(code as u32, words[2] >> 24);
+            assert_eq!(code.get() as u32, words[2] >> 24);
             assert_eq!(
                 endpoint.map_or(0, DeviceContextIndex::get) as u32,
                 (words[3] >> 16) & 0x1f
@@ -282,7 +282,7 @@ fn every_event_decodes_from_the_bits_the_specification_gives() {
         } => {
             assert_eq!(kind, transfer_request_block_type::COMMAND_COMPLETION);
             assert_eq!(transfer_request_block, pointer);
-            assert_eq!(code as u32, words[2] >> 24);
+            assert_eq!(code.get() as u32, words[2] >> 24);
             assert_eq!(slot.map_or(0, SlotId::get) as u32, words[3] >> 24);
         }
         Event::PortStatus { port } => {

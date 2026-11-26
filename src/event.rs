@@ -5,9 +5,11 @@
 use super::*;
 
 /// **One event, decoded.** The fields a driver uses, by event type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum Event {
     /// A transfer finished (or failed).
+    #[non_exhaustive]
     Transfer {
         /// The physical address of the TRB it was about. That holds only while the driver issues
         /// no Event Data TRBs: for one of those the controller sets the Event Data bit (bit 2 of
@@ -17,7 +19,7 @@ pub enum Event {
         /// Bytes *not* transferred: zero for a full buffer, positive for a short packet.
         residual: u32,
         /// The completion code.
-        code: u8,
+        code: CompletionCode,
         /// The device slot, or `None` when the field reads 0, the reserved slot id.
         slot: Option<SlotId>,
         /// The endpoint's device context index (1 for endpoint 0), or `None` when the field reads
@@ -25,21 +27,24 @@ pub enum Event {
         endpoint: Option<DeviceContextIndex>,
     },
     /// A command finished.
+    #[non_exhaustive]
     Command {
         /// The physical address of the command TRB.
         transfer_request_block: u64,
         /// The completion code.
-        code: u8,
+        code: CompletionCode,
         /// The slot it concerns: for Enable Slot, the slot the controller chose. `None` when the
         /// field reads 0: a command that names no slot, or an Enable Slot the controller refused.
         slot: Option<SlotId>,
     },
     /// A port's status changed: the driver reads `PORTSC` to learn how.
+    #[non_exhaustive]
     PortStatus {
         /// The port, or `None` when the field reads 0, the reserved port number.
         port: Option<PortNumber>,
     },
     /// Any other event type, which this driver does not act on.
+    #[non_exhaustive]
     Other {
         /// Its type code.
         kind: u8,
@@ -63,7 +68,7 @@ impl Event {
     pub const fn decode(transfer_request_block: TransferRequestBlock) -> Event {
         let words = transfer_request_block.0;
         let pointer = words[0] as u64 | (words[1] as u64) << 32;
-        let code = (words[2] >> 24) as u8;
+        let code = CompletionCode::new((words[2] >> 24) as u8);
         let slot = SlotId::new((words[3] >> 24) as u8);
         match transfer_request_block.kind() {
             transfer_request_block_type::TRANSFER_EVENT => Event::Transfer {

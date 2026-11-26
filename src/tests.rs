@@ -22,7 +22,7 @@ fn events_decode_by_type() {
         Event::decode(t),
         Event::Command {
             transfer_request_block: 0x1000,
-            code: completion::SUCCESS,
+            code: CompletionCode::SUCCESS,
             slot: Some(slot_id(1))
         }
     );
@@ -33,7 +33,7 @@ fn events_decode_by_type() {
         Event::Transfer {
             transfer_request_block: 0x7000,
             residual: 2,
-            code: completion::SHORT_PACKET,
+            code: CompletionCode::SHORT_PACKET,
             slot: Some(slot_id(1)),
             endpoint: Some(index(3))
         }
@@ -477,21 +477,21 @@ fn every_completion_code_has_its_specification_name() {
         "Reserved",
     ];
     for (code, expected) in (0..).zip(table) {
-        assert_eq!(completion::name(code), expected, "code {code}");
+        assert_eq!(CompletionCode::new(code).name(), expected, "code {code}");
     }
-    assert_eq!(completion::name(completion::STALL), "Stall Error");
+    assert_eq!(CompletionCode::STALL.name(), "Stall Error");
     assert_eq!(
-        completion::name(completion::SPLIT_TRANSACTION_ERROR),
+        CompletionCode::SPLIT_TRANSACTION_ERROR.name(),
         "Split Transaction Error"
     );
     for code in 37..=191 {
-        assert_eq!(completion::name(code), "Reserved");
+        assert_eq!(CompletionCode::new(code).name(), "Reserved");
     }
     for code in 192..=223 {
-        assert_eq!(completion::name(code), "Vendor Defined Error");
+        assert_eq!(CompletionCode::new(code).name(), "Vendor Defined Error");
     }
     for code in 224..=255 {
-        assert_eq!(completion::name(code), "Vendor Defined Info");
+        assert_eq!(CompletionCode::new(code).name(), "Vendor Defined Info");
     }
 }
 

@@ -156,6 +156,7 @@ pub const RESET_TIMEOUT_MILLISECONDS: u64 = 800;
 
 /// **What [`PortDebounce::sample`] says**, after each read of the ports.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum DebounceVerdict {
     /// Keep reading: the ports have changed within [`DEBOUNCE_STABLE_MILLISECONDS`], and the wait
     /// has not reached [`DEBOUNCE_TIMEOUT_MILLISECONDS`].

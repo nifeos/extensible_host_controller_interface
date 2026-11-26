@@ -56,6 +56,7 @@ pub struct ProducerRing {
 /// carries it goes in after the rest. [`ProducerRing::try_enqueue`] states the order and the
 /// barriers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct TransferRequestBlockPlacement {
     /// Where the TRB goes.
     pub index: u16,

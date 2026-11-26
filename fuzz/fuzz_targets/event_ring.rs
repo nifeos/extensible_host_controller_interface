@@ -39,12 +39,13 @@ fn check_event(transfer_request_block: TransferRequestBlock) {
             code,
             slot,
             endpoint,
+            ..
         } => {
             assert_eq!(kind, TRANSFER_EVENT);
             assert_eq!(address, pointer);
             assert!(residual < 1 << 24, "the residual length is 24 bits");
             assert_eq!(residual, words[2] & 0x00ff_ffff);
-            assert_eq!(code, (words[2] >> 24) as u8);
+            assert_eq!(code.get(), (words[2] >> 24) as u8);
             assert_eq!(slot.map_or(0, SlotId::get), (words[3] >> 24) as u8);
             assert_eq!(
                 endpoint.map_or(0, DeviceContextIndex::get),
@@ -56,20 +57,23 @@ fn check_event(transfer_request_block: TransferRequestBlock) {
             transfer_request_block: address,
             code,
             slot,
+            ..
         } => {
             assert_eq!(kind, COMMAND_COMPLETION);
             assert_eq!(address, pointer);
-            assert_eq!(code, (words[2] >> 24) as u8);
+            assert_eq!(code.get(), (words[2] >> 24) as u8);
             assert_eq!(slot.map_or(0, SlotId::get), (words[3] >> 24) as u8);
         }
-        Event::PortStatus { port } => {
+        Event::PortStatus { port, .. } => {
             assert_eq!(kind, PORT_STATUS_CHANGE);
             assert_eq!(port.map_or(0, PortNumber::get), (words[0] >> 24) as u8);
         }
-        Event::Other { kind: other } => {
+        Event::Other { kind: other, .. } => {
             assert_eq!(other, kind);
             assert!(![TRANSFER_EVENT, COMMAND_COMPLETION, PORT_STATUS_CHANGE].contains(&other));
         }
+        // `Event` is non-exhaustive: a variant added later fails here until the target holds it.
+        unknown => panic!("an event this target does not hold: {unknown:?}"),
     }
 }
 

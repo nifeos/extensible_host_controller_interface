@@ -13,8 +13,8 @@
 //! `EventRing::is_ready` describe.
 
 use extensible_host_controller_interface::{
-    DeviceContextIndex, Direction, Event, EventRing, ProducerRing, SlotId, TransferRequestBlock,
-    TransferType, completion, context, transfer_request_block_type,
+    CompletionCode, DeviceContextIndex, Direction, Event, EventRing, ProducerRing, SlotId,
+    TransferRequestBlock, TransferType, context, transfer_request_block_type,
 };
 
 /// Where the fake's physical memory starts, and how many TRBs it holds.
@@ -71,7 +71,7 @@ impl FakeController {
                 continue;
             }
             if t.interrupt_on_completion() {
-                self.post_transfer_event(memory, self.dequeue, completion::SUCCESS);
+                self.post_transfer_event(memory, self.dequeue, CompletionCode::SUCCESS);
             }
             self.dequeue += 16;
         }
@@ -79,11 +79,11 @@ impl FakeController {
 
     /// Write a Transfer Event (xHCI 1.2 section 6.4.2.1) for the TRB at `pointer`: nothing left
     /// untransferred, completion `code`, the slot and endpoint, and this lap's cycle bit.
-    fn post_transfer_event(&mut self, memory: &mut Memory, pointer: u64, code: u8) {
+    fn post_transfer_event(&mut self, memory: &mut Memory, pointer: u64, code: CompletionCode) {
         let event = TransferRequestBlock::from_dwords([
             pointer as u32,
             (pointer >> 32) as u32,
-            u32::from(code) << 24,
+            u32::from(code.get()) << 24,
             u32::from(SLOT.get()) << 24
                 | u32::from(ENDPOINT_ZERO.get()) << 16
                 | u32::from(transfer_request_block_type::TRANSFER_EVENT) << 10
@@ -160,7 +160,7 @@ fn main() {
                         "round {round}: transfer at {transfer_request_block:#x} on slot {} \
                          ended with {}",
                         SLOT.get(),
-                        completion::name(code)
+                        code.name()
                     );
                     assert!(transfers.complete(transfer_request_block));
                     transfers_completed += 1;

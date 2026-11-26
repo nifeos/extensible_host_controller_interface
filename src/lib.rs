@@ -85,19 +85,16 @@ pub const COMMAND_COMPLETION_TIMEOUT_MILLISECONDS: u64 = 5000;
 /// [`TransferRequestBlock::kind`] or an [`Event::Other`] type against a named code.
 pub mod transfer_request_block_type;
 
-/// Completion codes (xHCI 1.2 section 6.4.5, Table 6-90): every code the specification defines,
-/// and [`completion::name`] for a transcript. Reach for them when deciding what a transfer or
-/// command completion event's code means.
-pub mod completion;
-
 #[cfg(test)]
 mod tests;
 
+mod completion;
 mod event;
 mod identity;
 mod ring;
 mod transfer_request_block;
 
+pub use completion::CompletionCode;
 pub use context::interrupt_interval;
 pub use event::Event;
 pub use identity::{DeviceContextIndex, PortNumber, PortSpeed, SlotId};
