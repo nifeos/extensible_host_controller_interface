@@ -65,6 +65,13 @@ pub const fn device_offset(device_context_index: u8, context_bytes: u64) -> u64 
 
 /// **The input control context**: `add` and `drop` are bitmaps of context indices (bit 0 the slot
 /// context, bit `n` DCI `n`).
+///
+/// ```
+/// use extensible_host_controller_interface::context;
+///
+/// // Address Device adds the slot context and endpoint 0's, DCI 0 and 1.
+/// assert_eq!(context::input_control(0b11, 0), [0, 0b11, 0, 0, 0, 0, 0, 0]);
+/// ```
 #[must_use]
 pub const fn input_control(add: u32, drop: u32) -> [u32; 8] {
     [drop, add, 0, 0, 0, 0, 0, 0]
@@ -72,6 +79,16 @@ pub const fn input_control(add: u32, drop: u32) -> [u32; 8] {
 
 /// **A slot context for a device on root port `port`** at `speed`, whose highest context is DCI
 /// `entries`. Route string 0: the device is on a root port, not behind a hub.
+///
+/// ```
+/// use extensible_host_controller_interface::{PortNumber, PortSpeed, context};
+///
+/// // A full-speed device on root port 3 whose highest context is endpoint 0's.
+/// let port = PortNumber::new(3).unwrap();
+/// let slot = context::slot(PortSpeed::FULL, port, context::endpoint_index(0));
+/// assert_eq!(slot[0], 1 << 20 | 1 << 27);
+/// assert_eq!(slot[1], 3 << 16);
+/// ```
 #[must_use]
 pub const fn slot(speed: PortSpeed, port: PortNumber, entries: DeviceContextIndex) -> [u32; 8] {
     [
@@ -110,6 +127,17 @@ pub const fn slot_device_number(context: &[u32; 8]) -> u8 {
 /// so nothing spills into the reserved bit, Host Initiate Disable or Max Burst Size beside it.
 /// Every [`EndpointType`] code fits those bits today; the mask keeps the field its width if a code
 /// ever does not.
+///
+/// ```
+/// use extensible_host_controller_interface::context::{self, EndpointType};
+///
+/// // A boot keyboard's interrupt IN endpoint: 8-byte packets, every 2 to the 3 microframes,
+/// // its ring at 0x7000 with consumer cycle 1.
+/// let endpoint = context::endpoint(EndpointType::InterruptIn, 8, 3, 0x7000 | 1, 8);
+/// assert_eq!(endpoint[0], 3 << 16);
+/// assert_eq!(endpoint[1], 3 << 1 | 7 << 3 | 8 << 16);
+/// assert_eq!([endpoint[2], endpoint[3]], [0x7001, 0]);
+/// ```
 #[must_use]
 pub const fn endpoint(
     kind: EndpointType,

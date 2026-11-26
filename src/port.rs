@@ -127,6 +127,18 @@ pub const fn speed_name(speed: PortSpeed) -> &'static str {
 /// [`DEBOUNCE_STABLE_MILLISECONDS`], read every [`DEBOUNCE_STEP_MILLISECONDS`], giving up at [`DEBOUNCE_TIMEOUT_MILLISECONDS`].
 /// The clock starts when the ports are powered, so nothing is believed before
 /// [`DEBOUNCE_STABLE_MILLISECONDS`] after power either. The numbers are Linux's (`drivers/usb/core/hub.c`).
+///
+/// ```
+/// use extensible_host_controller_interface::port::{
+///     Connections, DebounceVerdict, PortDebounce,
+/// };
+///
+/// // Port 1 is connected when the ports are powered at 0 ms, and stays so.
+/// let port_1: Connections = [1 << 1, 0, 0, 0, 0, 0, 0, 0];
+/// let mut debounce = PortDebounce::new(0, port_1);
+/// assert_eq!(debounce.sample(25, port_1), DebounceVerdict::Pending);
+/// assert_eq!(debounce.sample(100, port_1), DebounceVerdict::Settled);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PortDebounce {
     start_milliseconds: u64,

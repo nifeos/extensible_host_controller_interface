@@ -188,6 +188,20 @@ impl Capabilities {
     /// [`CAPABILITY_PARAMETERS_1_REGISTER`], [`DOORBELL_OFFSET_REGISTER`] and
     /// [`RUNTIME_REGISTER_SPACE_OFFSET_REGISTER`]. Total, because every one of them
     /// is the hardware's word, and a value the caller cannot use is the caller's to refuse.
+    ///
+    /// ```
+    /// use extensible_host_controller_interface::Capabilities;
+    ///
+    /// // QEMU's qemu-xhci, read at offsets 0x00, 0x04, 0x08, 0x10, 0x14 and 0x18.
+    /// let capabilities = Capabilities::decode(0x0100_0040, 0x0800_1040, 0, 0x0008_7000, 0x2000, 0x1000);
+    /// assert_eq!(capabilities.operational(), 0x40);
+    /// assert_eq!(capabilities.version(), 0x0100);
+    /// assert_eq!(capabilities.maximum_slots(), 64);
+    /// assert_eq!(capabilities.maximum_ports(), 8);
+    /// assert_eq!(capabilities.context_bytes(), 32);
+    /// assert_eq!(capabilities.extended(), 0x20);
+    /// assert!(!capabilities.has_64_bit_addressing());
+    /// ```
     pub const fn decode(
         capability_registers_length: u32,
         structural_parameters_1: u32,
@@ -337,6 +351,21 @@ impl Capabilities {
 ///
 /// Bounded at 64 hops and by `limit`: the list is a linked list in a device's register file, so a
 /// broken controller must end the walk, not hang the caller walking it.
+///
+/// ```
+/// use extensible_host_controller_interface::{extended_capabilities, registers};
+///
+/// // A legacy support capability (id 1) at 0x20 whose next is 4 dwords on, then a Supported
+/// // Protocol capability (id 2) at 0x30 that ends the list.
+/// let mut read = |offset: u64| match offset {
+///     0x20 => 0x0000_0401,
+///     0x30 => 0x0200_0002,
+///     _ => 0,
+/// };
+/// let id = extended_capabilities::SUPPORTED_PROTOCOL_EXTENDED_CAPABILITY_ID;
+/// assert_eq!(registers::find_extended(0x20, 0x1000, id, &mut read), Some(0x30));
+/// assert_eq!(registers::find_extended(0x20, 0x1000, 0xc0, &mut read), None);
+/// ```
 pub fn find_extended(
     first: u64,
     limit: u64,

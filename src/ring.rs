@@ -197,6 +197,22 @@ impl ProducerRing {
 }
 
 /// **The event ring, from the consumer's side**: one segment of `entries` TRBs at a physical base.
+///
+/// ```
+/// use extensible_host_controller_interface::{EventRing, TransferRequestBlock};
+///
+/// let mut events = EventRing::new(0x3000, 16);
+/// // A zeroed entry has cycle 0, so it is not yet an event.
+/// assert!(!events.is_ready(&TransferRequestBlock::from_dwords([0; 4])));
+/// // The controller writes a Port Status Change Event (type 34) for port 1 with cycle 1.
+/// let written = TransferRequestBlock::from_dwords([1 << 24, 0, 1 << 24, 34 << 10 | 1]);
+/// assert!(events.is_ready(&written));
+/// // Handle it, then advance and write the dequeue pointer to ERDP.
+/// events.advance();
+/// assert_eq!(events.dequeue_pointer(), 0x3010);
+/// // The one segment table entry the ERSTBA register points at.
+/// assert_eq!(events.segment_table_entry(), [0x3000, 0, 16, 0]);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EventRing {
     pub(crate) base: u64,

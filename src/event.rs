@@ -65,6 +65,23 @@ pub(crate) const EVENT_POINTER_HALVES_DO_NOT_OVERLAP: () =
 
 impl Event {
     /// Decode an event TRB. Total: every input is some variant.
+    ///
+    /// ```
+    /// use extensible_host_controller_interface::{
+    ///     CompletionCode, Event, SlotId, TransferRequestBlock,
+    /// };
+    ///
+    /// // A Command Completion Event (type 33): the command at 0x1000 succeeded, for slot 1.
+    /// let written = TransferRequestBlock::from_dwords([0x1000, 0, 1 << 24, 1 << 24 | 33 << 10 | 1]);
+    /// match Event::decode(written) {
+    ///     Event::Command { transfer_request_block, code, slot, .. } => {
+    ///         assert_eq!(transfer_request_block, 0x1000);
+    ///         assert_eq!(code, CompletionCode::SUCCESS);
+    ///         assert_eq!(slot, SlotId::new(1));
+    ///     }
+    ///     other => panic!("not a command completion: {other:?}"),
+    /// }
+    /// ```
     pub const fn decode(transfer_request_block: TransferRequestBlock) -> Event {
         let words = transfer_request_block.0;
         let pointer = words[0] as u64 | (words[1] as u64) << 32;
