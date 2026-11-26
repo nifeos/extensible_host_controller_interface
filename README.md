@@ -43,6 +43,10 @@ memory: the driver places it with `try_enqueue`, and the fake consumes the trans
 writes a Transfer Event. The driver then decodes the event and reports it with `complete`. Run it
 with `cargo run --example fake_controller`.
 
+The crate fixes no layout for the DMA memory: the caller places each ring, context and buffer.
+`examples/boot_keyboard_layout.rs` shows one layout, a page for each structure of a single-slot
+boot-keyboard driver. Run it with `cargo run --example boot_keyboard_layout`.
+
 ## What is proven
 
 Thirteen [Kani](https://github.com/model-checking/kani) harnesses, in `src/verification.rs`:
@@ -183,7 +187,6 @@ the assertion that the patch breaks. `git checkout -- src` reverts the patch.
 
 - Hubs are not modeled (route string 0), so the crate cannot address a device behind a hub. Only devices
   on the root ports work.
-- One page size: the DMA layout assumes 4 KiB pages (`PAGESIZE` bit 0).
 - Speeds are the default ids, the associated constants of `PortSpeed`. A controller whose Supported Protocol capability
   has a speed id count other than 0 defines its own, and the crate does not decode its Protocol
   Speed ID dwords.

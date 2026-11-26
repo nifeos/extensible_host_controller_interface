@@ -5,8 +5,7 @@
 //! file and direct memory access (DMA) memory and a user-space driver drives them; this is the
 //! arithmetic between.
 //!
-//! [`registers`] and [`Capabilities`] name the registers; [`direct_memory_access`] is the DMA region's layout; a
-//! Transfer Request Block (TRB, [`TransferRequestBlock`]), [`Event`], [`ProducerRing`] and
+//! [`registers`] and [`Capabilities`] name the registers; a Transfer Request Block (TRB, [`TransferRequestBlock`]), [`Event`], [`ProducerRing`] and
 //! [`EventRing`] are the ring discipline (xHCI 1.2, chapters 4 and 6); [`context`] holds slot and
 //! endpoint contexts; [`extended_capabilities`] holds the extended capability ids; [`port`] is the
 //! port status register.
@@ -38,11 +37,11 @@
 //! ```
 //!
 //! `examples/fake_controller.rs` in the repository runs whole control transfers against a
-//! simulated controller.
+//! simulated controller, and `examples/boot_keyboard_layout.rs` lays out one driver's DMA region.
+//! The crate itself fixes no layout.
 
 //! # BUGS
 //!
-//! - One page size: [`direct_memory_access`] assumes 4 KiB (`PAGESIZE` bit 0), and the driver refuses otherwise.
 //! - No streams, isochronous or bulk: the TRBs a keyboard needs and nothing more.
 //! - Speeds are the default ids, the associated constants of [`PortSpeed`]: a controller whose
 //!   [`extended_capabilities::SupportedProtocol::speed_id_count`] is not 0 defines its own, and
@@ -59,15 +58,11 @@
 struct ReadmeExample;
 
 pub mod context;
-pub mod direct_memory_access;
 pub mod extended_capabilities;
 pub mod port;
 pub mod registers;
 
 pub use registers::Capabilities;
-
-/// The page size every layout here is in.
-pub const PAGE_BYTES: u64 = 4096;
 
 /// **How long to wait for [`registers::STATUS_HALTED`]** after clearing [`registers::COMMAND_RUN`]. The controller halts
 /// within 16 ms (xHCI 1.2 section 5.4.1, Table 5-20); this is Linux's `XHCI_MAX_HALT_USEC`, twice
