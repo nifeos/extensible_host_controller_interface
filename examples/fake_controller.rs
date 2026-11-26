@@ -9,7 +9,7 @@
 //! decodes the event, and reports it to the transfer ring so that `try_enqueue` has room again.
 //!
 //! Physical memory here is a vector of TRBs indexed by address. A real driver writes the same
-//! values into DMA memory with the ordering and barriers `ProducerRing::enqueue` and
+//! values into DMA memory with the ordering and barriers `ProducerRing::try_enqueue` and
 //! `EventRing::is_ready` describe.
 
 use extensible_host_controller_interface::{

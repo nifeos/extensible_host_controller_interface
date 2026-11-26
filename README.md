@@ -25,8 +25,10 @@ assert_eq!((caps.port_status_and_control(1), caps.doorbell(0)), (Some(0x440), 0x
 
 // A four-entry command ring: three usable slots, then a link TRB back to the first.
 let mut ring = ProducerRing::new(0x1000, 4);
-let a = ring.enqueue(TransferRequestBlock::enable_slot());
+let a = ring.try_enqueue(TransferRequestBlock::enable_slot()).unwrap();
 assert_eq!((a.index, a.transfer_request_block.is_cycle(), a.link), (0, true, None));
+// When the Command Completion Event names that TRB, report it, which frees its entry.
+assert!(ring.complete(0x1000));
 ```
 
 The caller writes each placed TRB (and the link, when `link` is `Some`) to DMA memory at
@@ -93,10 +95,10 @@ a barrier instruction (Linux spells them `wmb()` and `rmb()`).
 
 To produce a TRB on a command or transfer ring:
 
-1. Keep at most `ring.capacity()` TRBs outstanding: placed, with no completion event yet.
-   `ring.try_enqueue` counts them, and refuses at capacity, for a caller that reports each
-   completion event's TRB pointer to `ring.complete`. `ring.enqueue` never refuses.
-2. Call `ring.enqueue`, then write dwords 0 to 2 of the placed TRB at
+1. Report each completion event's TRB pointer to `ring.complete`. The ring counts the TRBs
+   outstanding (placed, with no completion event yet) from those reports, and
+   `ring.try_enqueue` refuses once `ring.capacity()` of them are.
+2. Call `ring.try_enqueue`, then write dwords 0 to 2 of the placed TRB at
    `ring.entry_physical_address(index)` with volatile writes.
 3. Issue a write barrier, then write dword 3, which holds the cycle bit. Until that bit matches,
    the controller treats the TRB as not yet produced (xHCI 1.2 section 4.9.2).
@@ -183,10 +185,9 @@ the assertion that the patch breaks. `git checkout -- src` reverts the patch.
   Speed ID dwords.
 - No streams, isochronous or bulk transfers: the crate builds the TRBs a boot keyboard needs and
   nothing more.
-- `ProducerRing::enqueue` never refuses a TRB, and `ProducerRing::try_enqueue` refuses at
-  `ProducerRing::capacity` only while the caller reports every completion through
-  `ProducerRing::complete`. Past capacity, the next lap overwrites a TRB the controller has not
-  reached.
+- `ProducerRing::try_enqueue` refuses at `ProducerRing::capacity` only while the caller reports
+  every completion through `ProducerRing::complete`. A caller that stops reporting sees the ring
+  fill and refuse, not overwrite: the ring cannot see the controller's dequeue pointer.
 - The TRB builders do not check the 64 KiB rule: a data buffer must not cross a 64 KiB boundary
   (xHCI 1.2 section 6.4.1). `fits_one_transfer_request_block` says whether one does, and the
   caller chains several TRBs for a buffer that crosses one.

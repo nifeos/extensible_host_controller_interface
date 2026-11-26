@@ -45,9 +45,9 @@
 //!   [`extended_capabilities::SupportedProtocol::speed_id_count`] is not 0 defines its own, and
 //!   nothing here decodes its Protocol Speed ID dwords.
 //! - Hubs are not modeled (route string 0), so a device behind a hub cannot be addressed.
-//! - [`ProducerRing::enqueue`] never refuses a TRB, and [`ProducerRing::try_enqueue`] refuses at
-//!   [`ProducerRing::capacity`] only while the caller reports every completion through
-//!   [`ProducerRing::complete`]; the ring cannot see the controller's dequeue pointer.
+//! - [`ProducerRing::try_enqueue`] refuses at [`ProducerRing::capacity`] only while the caller
+//!   reports every completion through [`ProducerRing::complete`]; the ring cannot see the
+//!   controller's dequeue pointer.
 //! - The TRB builders do not check the 64 KiB rule (xHCI 1.2 section 6.4.1);
 //!   [`fits_one_transfer_request_block`] says whether a buffer crosses a boundary.
 
