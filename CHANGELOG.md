@@ -5,7 +5,7 @@ sentence beside it.
 
 ## 0.1.0-pre.4
 
-- The crate's code is unchanged. The README names the checks that have not run on a controller in
+- The crate's code does not change. The README names the checks that have not run on a controller in
   silicon, and the stranger-test record is current.
 
 ## 0.1.0-pre.3
