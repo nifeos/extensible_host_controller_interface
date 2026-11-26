@@ -54,7 +54,7 @@ struct FakeController {
 
 impl FakeController {
     /// What a doorbell does: run every TRB the driver produced, and write an event for each one
-    /// that asks for it (Interrupt On Completion, bit 5 of the last dword).
+    /// that asks for it (Interrupt On Completion).
     fn ring_doorbell(&mut self, memory: &mut Memory) {
         loop {
             let t = memory.read(self.dequeue);
@@ -62,13 +62,15 @@ impl FakeController {
                 return;
             }
             if t.kind() == transfer_request_block_type::LINK {
-                if t.0[3] & 1 << 1 != 0 {
+                let [low, high, _, control] = t.dwords();
+                // Toggle Cycle, bit 1 of the link's last dword.
+                if control & 1 << 1 != 0 {
                     self.consumer_cycle = !self.consumer_cycle;
                 }
-                self.dequeue = u64::from(t.0[0]) | u64::from(t.0[1]) << 32;
+                self.dequeue = u64::from(low) | u64::from(high) << 32;
                 continue;
             }
-            if t.0[3] & 1 << 5 != 0 {
+            if t.interrupt_on_completion() {
                 self.post_transfer_event(memory, self.dequeue, completion::SUCCESS);
             }
             self.dequeue += 16;
@@ -78,7 +80,7 @@ impl FakeController {
     /// Write a Transfer Event (xHCI 1.2 section 6.4.2.1) for the TRB at `pointer`: nothing left
     /// untransferred, completion `code`, the slot and endpoint, and this lap's cycle bit.
     fn post_transfer_event(&mut self, memory: &mut Memory, pointer: u64, code: u8) {
-        let event = TransferRequestBlock([
+        let event = TransferRequestBlock::from_dwords([
             pointer as u32,
             (pointer >> 32) as u32,
             u32::from(code) << 24,
@@ -97,7 +99,10 @@ impl FakeController {
 }
 
 fn main() {
-    let mut memory = Memory(vec![TransferRequestBlock([0; 4]); MEMORY_ENTRIES]);
+    let mut memory = Memory(vec![
+        TransferRequestBlock::from_dwords([0; 4]);
+        MEMORY_ENTRIES
+    ]);
     let mut transfers = ProducerRing::new(TRANSFER_RING, TRANSFER_RING_ENTRIES);
     let mut events = EventRing::new(EVENT_RING, EventRing::MINIMUM_SEGMENT_ENTRIES);
     let mut controller = FakeController {

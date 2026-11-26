@@ -4,9 +4,13 @@
 
 use super::*;
 
-/// **One TRB**: four little-endian dwords, the cycle bit in bit 0 of the last.
+/// **One TRB**: four dwords, the cycle bit in bit 0 of the last. The controller reads each dword
+/// little-endian; [`TransferRequestBlock::dwords`] gives them in the host's order.
+///
+/// The dwords are private, so the builders below are the way to make one. A TRB the controller
+/// wrote, such as an event, comes in through [`TransferRequestBlock::from_dwords`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TransferRequestBlock(pub [u32; 4]);
+pub struct TransferRequestBlock(pub(crate) [u32; 4]);
 
 /// Interrupt On Completion: ask for an event when this TRB completes.
 pub(crate) const INTERRUPT_ON_COMPLETION: u32 = 1 << 5;
@@ -76,6 +80,34 @@ pub(crate) const fn control(kind: u8) -> u32 {
 }
 
 impl TransferRequestBlock {
+    /// **A TRB from its four dwords**, as read from memory the controller wrote: an event, or an
+    /// entry of a ring the caller inspects. Nothing is checked; [`Event::decode`] reads it.
+    ///
+    /// ```
+    /// use extensible_host_controller_interface::TransferRequestBlock;
+    ///
+    /// let t = TransferRequestBlock::from_dwords([0x1000, 0, 0, 1]);
+    /// assert_eq!((t.dwords(), t.is_cycle()), ([0x1000, 0, 0, 1], true));
+    /// ```
+    pub const fn from_dwords(dwords: [u32; 4]) -> TransferRequestBlock {
+        TransferRequestBlock(dwords)
+    }
+
+    /// **The four dwords**, in the host's order, for the caller to write to memory: dwords 0 to 2
+    /// first, then dword 3, which holds the cycle bit.
+    pub const fn dwords(&self) -> [u32; 4] {
+        self.0
+    }
+
+    /// (`interrupt_on_completion`, xHCI 1.2 specification section 6.4.1.1) Whether the TRB asks the
+    /// controller for an event when it completes: the Interrupt On Completion bit, bit 5 of
+    /// dword 3.
+    #[doc(alias = "IOC")]
+    #[doc(alias = "asks for a completion event")]
+    pub const fn interrupt_on_completion(&self) -> bool {
+        self.0[3] & INTERRUPT_ON_COMPLETION != 0
+    }
+
     /// The TRB's type code.
     pub const fn kind(&self) -> u8 {
         ((self.0[3] >> 10) & 0x3f) as u8

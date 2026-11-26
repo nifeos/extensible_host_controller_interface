@@ -28,7 +28,7 @@ fn dword(bytes: &[u8]) -> u32 {
 
 /// Hold one decoded event to the TRB it came from.
 fn check_event(transfer_request_block: TransferRequestBlock) {
-    let words = transfer_request_block.0;
+    let words = transfer_request_block.dwords();
     let event = Event::decode(transfer_request_block);
     assert_eq!(event, Event::decode(transfer_request_block));
     let pointer = u64::from(words[0]) | u64::from(words[1]) << 32;
@@ -85,10 +85,10 @@ fuzz_target!(|data: &[u8]| {
     assert_eq!(table_entry[2], u32::from(entries));
 
     // The segment as memory: zeroed, so nothing reads as written until the controller writes it.
-    let mut segment = vec![TransferRequestBlock([0; 4]); usize::from(entries)];
+    let mut segment = vec![TransferRequestBlock::from_dwords([0; 4]); usize::from(entries)];
     let mut write_index = 0usize;
     for chunk in writes.as_chunks::<16>().0 {
-        segment[write_index] = TransferRequestBlock([
+        segment[write_index] = TransferRequestBlock::from_dwords([
             dword(&chunk[0..4]),
             dword(&chunk[4..8]),
             dword(&chunk[8..12]),

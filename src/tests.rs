@@ -519,3 +519,15 @@ fn complete_counts_by_entry_index_across_the_wrap() {
     }
     assert_eq!(ring.try_enqueue(TransferRequestBlock::enable_slot()), None);
 }
+
+/// A TRB's dwords come back as they went in, and the Interrupt On Completion question reads bit 5
+/// of dword 3 alone.
+#[test]
+fn a_transfer_request_block_round_trips_its_dwords() {
+    let words = [0x1234_5678, 0x9abc_def0, 0x0fed_cba9, 0x8765_4321];
+    assert_eq!(TransferRequestBlock::from_dwords(words).dwords(), words);
+    assert!(TransferRequestBlock::from_dwords([0, 0, 0, 1 << 5]).interrupt_on_completion());
+    assert!(!TransferRequestBlock::from_dwords([!0, !0, !0, !(1 << 5)]).interrupt_on_completion());
+    assert!(TransferRequestBlock::status(false).interrupt_on_completion());
+    assert!(!TransferRequestBlock::setup(0, TransferType::NoDataStage).interrupt_on_completion());
+}
