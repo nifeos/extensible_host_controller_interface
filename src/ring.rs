@@ -76,7 +76,9 @@ impl ProducerRing {
     pub const MAXIMUM_SEGMENT_ENTRIES: u16 = 4096;
 
     /// A ring of `entries` TRBs (the last of them the link) at physical `base`, in the state a
-    /// zeroed ring starts in: producer cycle 1, so the zeros read as not produced.
+    /// zeroed ring starts in: producer cycle 1, so the zeros read as not produced. On a controller
+    /// without [`has_64_bit_addressing`](crate::Capabilities::has_64_bit_addressing), `base` and
+    /// every address the ring carries must lie below 4 GiB.
     ///
     /// # Panics
     /// When `entries` is outside [`MINIMUM_SEGMENT_ENTRIES`](Self::MINIMUM_SEGMENT_ENTRIES) to
@@ -208,7 +210,11 @@ impl EventRing {
     /// **The most entries an event ring segment may have** (xHCI 1.2 section 6.5, Table 6-95).
     pub const MAXIMUM_SEGMENT_ENTRIES: u16 = 4096;
 
-    /// A zeroed ring: consumer cycle 1, so the zeros read as not yet written.
+    /// A zeroed ring: consumer cycle 1, so the zeros read as not yet written. On a controller
+    /// without [`has_64_bit_addressing`](crate::Capabilities::has_64_bit_addressing), `base` must
+    /// lie below 4 GiB. The ring is one segment, which every controller takes, since
+    /// [`maximum_event_ring_segments`](crate::Capabilities::maximum_event_ring_segments) is at
+    /// least 1.
     ///
     /// # Panics
     /// When `entries` is outside [`MINIMUM_SEGMENT_ENTRIES`](Self::MINIMUM_SEGMENT_ENTRIES) to

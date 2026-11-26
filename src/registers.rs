@@ -162,29 +162,24 @@ pub(crate) const SCRATCHPAD_FIELDS_DO_NOT_OVERLAP: () = assert!(((0x1fu32 << 5) 
 /// The write-one-to-clear event bits of `USBLEGCTLSTS`.
 pub const LEGACY_SYSTEM_MANAGEMENT_INTERRUPT_EVENTS: u32 = 0b111 << 29;
 
-/// **The facts the capability registers state**, decoded.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// **The facts the capability registers state**, decoded. The fields are private and read
+/// through methods of the same names, so that a later release can decode another field without
+/// breaking a caller.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct Capabilities {
-    /// `CAPLENGTH`: where the operational registers start.
-    pub operational: u64,
-    /// `HCIVERSION`, in binary-coded decimal (0x0100 for 1.0).
-    pub version: u16,
-    /// How many device slots the controller has.
-    pub maximum_slots: u8,
-    /// How many interrupters.
-    pub maximum_interrupters: u16,
-    /// How many root hub ports.
-    pub maximum_ports: u8,
-    /// How many scratchpad pages the controller wants for itself.
-    pub scratchpads: u16,
-    /// How many bytes one context is: 32, or 64 when `HCCPARAMS1.CSZ` is set.
-    pub context_bytes: u64,
-    /// Where the extended capabilities list starts, in bytes, or 0 for none.
-    pub extended: u64,
-    /// Where the doorbell array starts.
-    pub doorbells: u64,
-    /// Where the runtime registers start.
-    pub runtime: u64,
+    operational: u64,
+    version: u16,
+    maximum_slots: u8,
+    maximum_interrupters: u16,
+    maximum_ports: u8,
+    scratchpads: u16,
+    context_bytes: u64,
+    extended: u64,
+    doorbells: u64,
+    runtime: u64,
+    addressing_64_bit: bool,
+    event_ring_segment_table_maximum_exponent: u8,
 }
 
 impl Capabilities {
@@ -217,7 +212,75 @@ impl Capabilities {
             extended: ((capability_parameters_1 >> 16) as u64) * 4,
             doorbells: (doorbell_offset & !0x3) as u64,
             runtime: (runtime_register_space_offset & !0x1f) as u64,
+            addressing_64_bit: capability_parameters_1 & 1 != 0,
+            event_ring_segment_table_maximum_exponent: ((structural_parameters_2 >> 4) & 0xf) as u8,
         }
+    }
+
+    /// `CAPLENGTH`: where the operational registers start.
+    pub const fn operational(&self) -> u64 {
+        self.operational
+    }
+
+    /// `HCIVERSION`, in binary-coded decimal (0x0100 for 1.0).
+    pub const fn version(&self) -> u16 {
+        self.version
+    }
+
+    /// How many device slots the controller has.
+    pub const fn maximum_slots(&self) -> u8 {
+        self.maximum_slots
+    }
+
+    /// How many interrupters.
+    pub const fn maximum_interrupters(&self) -> u16 {
+        self.maximum_interrupters
+    }
+
+    /// How many root hub ports.
+    pub const fn maximum_ports(&self) -> u8 {
+        self.maximum_ports
+    }
+
+    /// How many scratchpad pages the controller wants for itself.
+    pub const fn scratchpads(&self) -> u16 {
+        self.scratchpads
+    }
+
+    /// How many bytes one context is: 32, or 64 when `HCCPARAMS1.CSZ` is set.
+    pub const fn context_bytes(&self) -> u64 {
+        self.context_bytes
+    }
+
+    /// Where the extended capabilities list starts, in bytes, or 0 for none.
+    pub const fn extended(&self) -> u64 {
+        self.extended
+    }
+
+    /// Where the doorbell array starts.
+    pub const fn doorbells(&self) -> u64 {
+        self.doorbells
+    }
+
+    /// Where the runtime registers start.
+    pub const fn runtime(&self) -> u64 {
+        self.runtime
+    }
+
+    /// **Whether the controller reaches memory above 4 GiB** (`HCCPARAMS1.AC64`, bit 0, xHCI 1.2
+    /// section 5.3.6). When it does not, every ring, context and buffer address the caller gives
+    /// it must lie below 4 GiB, since the controller drops the high dword.
+    #[doc(alias = "AC64")]
+    #[doc(alias = "64-bit Addressing Capability")]
+    pub const fn has_64_bit_addressing(&self) -> bool {
+        self.addressing_64_bit
+    }
+
+    /// **The most segments an event ring segment table may hold** (`HCSPARAMS2.ERST Max`, bits 4
+    /// to 7, xHCI 1.2 section 5.3.4): 2 to the power the field gives, so 1 to 32,768.
+    #[doc(alias = "ERST Max")]
+    pub const fn maximum_event_ring_segments(&self) -> u16 {
+        1 << self.event_ring_segment_table_maximum_exponent
     }
 
     /// Port `port_number`'s **Port Status and Control** register (`PORTSC`, xHCI 1.2 section
@@ -310,14 +373,16 @@ mod tests {
     fn qemus_capability_registers_decode() {
         let capabilities =
             Capabilities::decode(0x0100_0040, 0x0800_0840, 0, 0x0008_7000, 0x2000, 0x1000);
-        assert_eq!(capabilities.operational, 0x40);
-        assert_eq!(capabilities.version, 0x0100);
-        assert_eq!(capabilities.maximum_slots, 64);
-        assert_eq!(capabilities.maximum_interrupters, 8);
-        assert_eq!(capabilities.maximum_ports, 8);
-        assert_eq!(capabilities.scratchpads, 0);
-        assert_eq!(capabilities.context_bytes, 32);
-        assert_eq!(capabilities.extended, 0x20); // the dword count in HCCPARAMS1's high half, times four
+        assert_eq!(capabilities.operational(), 0x40);
+        assert_eq!(capabilities.version(), 0x0100);
+        assert_eq!(capabilities.maximum_slots(), 64);
+        assert_eq!(capabilities.maximum_interrupters(), 8);
+        assert_eq!(capabilities.maximum_ports(), 8);
+        assert_eq!(capabilities.scratchpads(), 0);
+        assert_eq!(capabilities.context_bytes(), 32);
+        assert_eq!(capabilities.extended(), 0x20); // the dword count in HCCPARAMS1's high half, times four
+        assert!(!capabilities.has_64_bit_addressing());
+        assert_eq!(capabilities.maximum_event_ring_segments(), 1);
         assert_eq!(capabilities.port_status_and_control(port(1)), Some(0x440));
         assert_eq!(capabilities.port_status_and_control(port(8)), Some(0x4b0));
         assert_eq!(PortNumber::new(0), None);
@@ -355,8 +420,24 @@ mod tests {
         let high = 0b00001 << 21; // one 32
         let low = 0b00011 << 27; // plus three
         let capabilities = Capabilities::decode(0x40, 0, high | low, 1 << 2, 0, 0);
-        assert_eq!(capabilities.scratchpads, 35);
-        assert_eq!(capabilities.context_bytes, 64);
+        assert_eq!(capabilities.scratchpads(), 35);
+        assert_eq!(capabilities.context_bytes(), 64);
+    }
+
+    /// `AC64` is bit 0 of `HCCPARAMS1`, beside the context size at bit 2, and `ERST Max` is the
+    /// exponent in `HCSPARAMS2` bits 4 to 7, below the scratchpad fields: a controller that reaches
+    /// all of memory and takes 2 to the 15 segments reads as both, and neither field reads the
+    /// other's bits.
+    #[test]
+    fn the_addressing_bit_and_the_segment_bound_read_their_own_bits() {
+        let capabilities = Capabilities::decode(0x40, 0, 0xf << 4, 1, 0, 0);
+        assert!(capabilities.has_64_bit_addressing());
+        assert_eq!(capabilities.maximum_event_ring_segments(), 32_768);
+        assert_eq!(capabilities.context_bytes(), 32);
+        assert_eq!(capabilities.scratchpads(), 0);
+        let capabilities = Capabilities::decode(0x40, 0, 3 << 4 | !0xf0, !1, 0, 0);
+        assert!(!capabilities.has_64_bit_addressing());
+        assert_eq!(capabilities.maximum_event_ring_segments(), 8);
     }
 
     /// The `USBCMD`, `USBSTS`, `IMAN`, `ERDP` and legacy support bits, pinned against xHCI 1.2

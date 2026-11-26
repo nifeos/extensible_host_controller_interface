@@ -396,8 +396,9 @@ fn every_command_trb_puts_its_slot_endpoint_and_pointer_in_their_fields() {
 /// **The capability registers decode each field from exactly its own bits, at its own width**,
 /// for any six dwords (xHCI 1.2 section 5.3). `CAPLENGTH` is a byte, `MaxSlots` a byte,
 /// `MaxIntrs` eleven bits, `MaxPorts` a byte, the scratchpad count ten bits from its two halves,
-/// the extended capabilities pointer a dword offset, and the doorbell and runtime offsets keep
-/// their reserved low bits clear.
+/// the extended capabilities pointer a dword offset, the doorbell and runtime offsets keep their
+/// reserved low bits clear, 64-bit addressing is bit 0 of `HCCPARAMS1`, and the event ring segment
+/// bound is 2 to the power of `HCSPARAMS2` bits 4 to 7.
 #[kani::proof]
 fn the_capability_registers_decode_each_field_from_its_own_bits() {
     let length: u32 = kani::any();
@@ -414,29 +415,34 @@ fn the_capability_registers_decode_each_field_from_its_own_bits() {
         doorbell,
         runtime,
     );
-    assert_eq!(capabilities.operational, (length & 0xff) as u64);
-    assert_eq!(capabilities.version as u32, length >> 16);
-    assert_eq!(capabilities.maximum_slots as u32, structural_1 & 0xff);
+    assert_eq!(capabilities.operational(), (length & 0xff) as u64);
+    assert_eq!(capabilities.version() as u32, length >> 16);
+    assert_eq!(capabilities.maximum_slots() as u32, structural_1 & 0xff);
     assert_eq!(
-        capabilities.maximum_interrupters as u32,
+        capabilities.maximum_interrupters() as u32,
         (structural_1 >> 8) & 0x7ff
     );
-    assert!(capabilities.maximum_interrupters < 1 << 11);
-    assert_eq!(capabilities.maximum_ports as u32, structural_1 >> 24);
+    assert!(capabilities.maximum_interrupters() < 1 << 11);
+    assert_eq!(capabilities.maximum_ports() as u32, structural_1 >> 24);
     let high = (structural_2 >> 21) & 0x1f;
     let low = structural_2 >> 27;
-    assert_eq!(capabilities.scratchpads as u32, high << 5 | low);
-    assert!(capabilities.scratchpads < 1 << 10);
+    assert_eq!(capabilities.scratchpads() as u32, high << 5 | low);
+    assert!(capabilities.scratchpads() < 1 << 10);
     assert_eq!(
-        capabilities.context_bytes,
+        capabilities.context_bytes(),
         if parameters_1 & 1 << 2 != 0 { 64 } else { 32 }
     );
-    assert_eq!(capabilities.extended, ((parameters_1 >> 16) as u64) * 4);
-    assert_eq!(capabilities.extended % 4, 0);
-    assert_eq!(capabilities.doorbells, (doorbell as u64) & !0x3);
-    assert_eq!(capabilities.doorbells >> 2, (doorbell >> 2) as u64);
-    assert_eq!(capabilities.runtime, (runtime as u64) & !0x1f);
-    assert_eq!(capabilities.runtime >> 5, (runtime >> 5) as u64);
+    assert_eq!(capabilities.extended(), ((parameters_1 >> 16) as u64) * 4);
+    assert_eq!(capabilities.extended() % 4, 0);
+    assert_eq!(capabilities.doorbells(), (doorbell as u64) & !0x3);
+    assert_eq!(capabilities.doorbells() >> 2, (doorbell >> 2) as u64);
+    assert_eq!(capabilities.runtime(), (runtime as u64) & !0x1f);
+    assert_eq!(capabilities.runtime() >> 5, (runtime >> 5) as u64);
+    assert_eq!(capabilities.has_64_bit_addressing(), parameters_1 & 1 != 0);
+    assert_eq!(
+        capabilities.maximum_event_ring_segments() as u32,
+        1 << ((structural_2 >> 4) & 0xf)
+    );
 }
 
 /// Falsification: replayable `falsifications/verification.the_port_debounce_answers_by_its_timeout.patch`
