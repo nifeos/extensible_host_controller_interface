@@ -256,9 +256,15 @@ impl Capabilities {
         Some(self.runtime + INTERRUPTER_0_REGISTER + 32 * interrupter as u64 + register_offset)
     }
 
-    /// Slot `slot`'s doorbell (0 for the command ring), as an offset into the file.
-    pub const fn doorbell(&self, slot: u8) -> u64 {
-        self.doorbells + 4 * slot as u64
+    /// Doorbell `target`'s register, as an offset into the file: 0 is the host controller's own,
+    /// rung for the command ring, and 1 to [`maximum_slots`](Self::maximum_slots) are the device
+    /// slots' (xHCI 1.2 section 5.6). The array holds `maximum_slots + 1` doorbells, so `None`
+    /// past the last: no such register exists.
+    pub const fn doorbell(&self, target: u8) -> Option<u64> {
+        if target > self.maximum_slots {
+            return None;
+        }
+        Some(self.doorbells + 4 * target as u64)
     }
 }
 
@@ -333,10 +339,13 @@ mod tests {
             capabilities.interrupter_register(8, INTERRUPTER_MANAGEMENT_REGISTER),
             None
         );
-        // Slot 0 is the command ring's doorbell, so the stride is read at 0 as well as at 1.
-        assert_eq!(capabilities.doorbell(0), 0x2000);
-        assert_eq!(capabilities.doorbell(1), 0x2004);
-        assert_eq!(capabilities.doorbell(2), 0x2008);
+        // Doorbell 0 is the command ring's, so the stride is read at 0 as well as at 1, and the
+        // 64 slots' doorbells end at 64.
+        assert_eq!(capabilities.doorbell(0), Some(0x2000));
+        assert_eq!(capabilities.doorbell(1), Some(0x2004));
+        assert_eq!(capabilities.doorbell(2), Some(0x2008));
+        assert_eq!(capabilities.doorbell(64), Some(0x2100));
+        assert_eq!(capabilities.doorbell(65), None);
     }
 
     /// The scratchpad count is split across two fields, high bits first in the register but low

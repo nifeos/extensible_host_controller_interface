@@ -24,7 +24,8 @@ use extensible_host_controller_interface::{
 // register and the command ring's doorbell:
 let caps = Capabilities::decode(0x0100_0040, 0x0800_1040, 0, 0x0000_7000, 0x2000, 0x1000);
 let port_1 = PortNumber::new(1).unwrap();
-assert_eq!((caps.port_status_and_control(port_1), caps.doorbell(0)), (Some(0x440), 0x2000));
+assert_eq!(caps.port_status_and_control(port_1), Some(0x440));
+assert_eq!(caps.doorbell(0), Some(0x2000));
 
 // A four-entry command ring: three usable slots, then a link TRB back to the first.
 let mut ring = ProducerRing::new(0x1000, 4);

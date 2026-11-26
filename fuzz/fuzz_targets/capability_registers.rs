@@ -129,11 +129,15 @@ fuzz_target!(|data: &[u8]| {
     {
         assert_eq!(capabilities.port_status_and_control(past), None);
     }
-    for slot in 0..=capabilities.maximum_slots {
+    // Doorbell 0 and every slot's have a register at the stride; one past the last slot has none.
+    for target in 0..=capabilities.maximum_slots {
         assert_eq!(
-            capabilities.doorbell(slot),
-            capabilities.doorbells + 4 * u64::from(slot)
+            capabilities.doorbell(target),
+            Some(capabilities.doorbells + 4 * u64::from(target))
         );
+    }
+    if let Some(past) = capabilities.maximum_slots.checked_add(1) {
+        assert_eq!(capabilities.doorbell(past), None);
     }
     assert_eq!(
         capabilities.interrupter(EVENT_RING_DEQUEUE_POINTER_REGISTER)
