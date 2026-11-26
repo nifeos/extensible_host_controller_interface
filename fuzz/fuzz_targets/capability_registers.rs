@@ -11,10 +11,10 @@
 
 #![no_main]
 
-use extensible_host_controller_interface::Capabilities;
 use extensible_host_controller_interface::registers::{
     EVENT_RING_DEQUEUE_POINTER_REGISTER, INTERRUPTER_MANAGEMENT_REGISTER, find_extended,
 };
+use extensible_host_controller_interface::{Capabilities, PortNumber};
 use libfuzzer_sys::fuzz_target;
 
 fn dword(bytes: &[u8]) -> u32 {
@@ -83,63 +83,81 @@ fuzz_target!(|data: &[u8]| {
         )
     );
 
-    assert!(capabilities.operational <= 0xff, "CAPLENGTH is one byte");
-    assert_eq!(capabilities.version, (capability_length >> 16) as u16);
-    assert_eq!(capabilities.maximum_slots, structural_parameters_1 as u8);
+    assert!(capabilities.operational() <= 0xff, "CAPLENGTH is one byte");
+    assert_eq!(capabilities.version(), (capability_length >> 16) as u16);
+    assert_eq!(capabilities.maximum_slots(), structural_parameters_1 as u8);
     assert!(
-        capabilities.maximum_interrupters < 1 << 11,
+        capabilities.maximum_interrupters() < 1 << 11,
         "MaxIntrs is 11 bits"
     );
     assert_eq!(
-        capabilities.maximum_ports,
+        capabilities.maximum_ports(),
         (structural_parameters_1 >> 24) as u8
     );
     assert!(
-        capabilities.scratchpads < 1 << 10,
+        capabilities.scratchpads() < 1 << 10,
         "the scratchpad count is 10 bits"
     );
-    assert!(matches!(capabilities.context_bytes, 32 | 64));
+    assert!(matches!(capabilities.context_bytes(), 32 | 64));
     assert_eq!(
-        capabilities.extended % 4,
+        capabilities.extended() % 4,
         0,
         "the extended pointer counts dwords"
     );
-    assert!(capabilities.extended < 1 << 18);
-    assert_eq!(capabilities.doorbells % 4, 0, "DBOFF is dword aligned");
-    assert_eq!(capabilities.runtime % 32, 0, "RTSOFF is 32-byte aligned");
+    assert!(capabilities.extended() < 1 << 18);
+    assert_eq!(capabilities.doorbells() % 4, 0, "DBOFF is dword aligned");
+    assert_eq!(capabilities.runtime() % 32, 0, "RTSOFF is 32-byte aligned");
+    assert_eq!(
+        capabilities.has_64_bit_addressing(),
+        capability_parameters_1 & 1 != 0
+    );
+    let segments = capabilities.maximum_event_ring_segments();
+    assert!(segments.is_power_of_two() && segments <= 1 << 15);
+    assert_eq!(
+        segments.trailing_zeros(),
+        (structural_parameters_2 >> 4) & 0xf
+    );
 
     // Every port's register follows the last at the 16-byte stride, from the operational base.
     let mut previous = None;
-    for port in 1..=capabilities.maximum_ports {
+    for port in 1..=capabilities.maximum_ports() {
         let offset = capabilities
-            .port_status_and_control(port)
+            .port_status_and_control(PortNumber::new(port).expect("ports count from 1"))
             .expect("every port up to the maximum has a register");
-        assert!(offset >= capabilities.operational);
+        assert!(offset >= capabilities.operational());
         if let Some(before) = previous {
             assert_eq!(offset, before + 0x10);
         }
         previous = Some(offset);
     }
-    // Port 0 and a port past the maximum have no register.
-    assert_eq!(capabilities.port_status_and_control(0), None);
-    if let Some(past) = capabilities.maximum_ports.checked_add(1) {
+    // A port past the maximum has no register; port 0 is not a port number at all.
+    assert_eq!(PortNumber::new(0), None);
+    if let Some(past) = capabilities
+        .maximum_ports()
+        .checked_add(1)
+        .and_then(PortNumber::new)
+    {
         assert_eq!(capabilities.port_status_and_control(past), None);
     }
-    for slot in 0..=capabilities.maximum_slots {
+    // Doorbell 0 and every slot's have a register at the stride; one past the last slot has none.
+    for target in 0..=capabilities.maximum_slots() {
         assert_eq!(
-            capabilities.doorbell(slot),
-            capabilities.doorbells + 4 * u64::from(slot)
+            capabilities.doorbell(target),
+            Some(capabilities.doorbells() + 4 * u64::from(target))
         );
+    }
+    if let Some(past) = capabilities.maximum_slots().checked_add(1) {
+        assert_eq!(capabilities.doorbell(past), None);
     }
     assert_eq!(
         capabilities.interrupter(EVENT_RING_DEQUEUE_POINTER_REGISTER)
             - capabilities.interrupter(INTERRUPTER_MANAGEMENT_REGISTER),
         EVENT_RING_DEQUEUE_POINTER_REGISTER - INTERRUPTER_MANAGEMENT_REGISTER
     );
-    assert!(capabilities.interrupter(INTERRUPTER_MANAGEMENT_REGISTER) >= capabilities.runtime);
+    assert!(capabilities.interrupter(INTERRUPTER_MANAGEMENT_REGISTER) >= capabilities.runtime());
 
     let id = walk_head[0];
     let first = u64::from(u16::from_le_bytes([walk_head[1], walk_head[2]]));
-    walk(file, capabilities.extended, id);
+    walk(file, capabilities.extended(), id);
     walk(file, first, id);
 });

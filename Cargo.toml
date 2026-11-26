@@ -6,6 +6,7 @@ rust-version = "1.85"
 description = "xHCI host controller logic as pure computation: register offsets and decode, TRBs, rings, contexts and port status, proven with Kani"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/partsfoundry/extensible_host_controller_interface"
+documentation = "https://docs.rs/extensible_host_controller_interface"
 readme = "README.md"
 keywords = ["xhci", "usb", "no-std", "kani", "driver"]
 categories = ["no-std", "embedded", "hardware-support"]

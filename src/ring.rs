@@ -1,37 +1,42 @@
-//! **The rings**: the producer rings the driver fills and the event ring it drains.
+//! **The rings**: the producer rings the caller fills and the event ring it drains.
 //!
 //! Reach for them to know where the next TRB goes, when to write a link, and which event is next.
 
 use super::*;
 
-/// **A ring the driver produces into**: the command ring and every transfer ring. Its last entry is
+/// **A ring the caller produces into**: the command ring and every transfer ring. Its last entry is
 /// always a link TRB back to the first.
 ///
 /// # Examples
 ///
-/// Four entries are three usable slots and a link TRB; the third enqueue also writes the link, and
-/// the cycle flips for the next lap. The four enqueues below show the wrap only: a driver keeps at
-/// most [`capacity`](ProducerRing::capacity) of them outstanding, here two, and waits for the
-/// controller to consume one before it places the next.
+/// Four entries are three usable slots and a link TRB, and [`capacity`](ProducerRing::capacity)
+/// is two. The third TRB of a lap also places the link, and the cycle flips for the next lap. A
+/// full ring refuses until the caller reports a completion event through
+/// [`complete`](ProducerRing::complete).
 ///
 /// ```
 /// use extensible_host_controller_interface::{ProducerRing, TransferRequestBlock};
 ///
 /// let mut ring = ProducerRing::new(0x1000, 4);
 /// assert_eq!(ring.capacity(), 2);
-/// let a = ring.enqueue(TransferRequestBlock::enable_slot());
+/// let a = ring.try_enqueue(TransferRequestBlock::enable_slot()).unwrap();
 /// assert_eq!((a.index, a.transfer_request_block.is_cycle(), a.link), (0, true, None));
-/// ring.enqueue(TransferRequestBlock::enable_slot());
-/// let c = ring.enqueue(TransferRequestBlock::enable_slot());
+/// ring.try_enqueue(TransferRequestBlock::enable_slot()).unwrap();
+/// assert_eq!(ring.try_enqueue(TransferRequestBlock::enable_slot()), None); // two outstanding
+///
+/// assert!(ring.complete(0x1000)); // the event for the first TRB frees its entry
+/// let c = ring.try_enqueue(TransferRequestBlock::enable_slot()).unwrap();
 /// assert_eq!(c.index, 2);
 /// let (at, link) = c.link.unwrap(); // the third TRB fills the lap, so the link is written too
 /// assert_eq!(at, 3);
 /// assert!(link.is_cycle()); // stamped with the lap it ends, so the controller follows it
-/// let d = ring.enqueue(TransferRequestBlock::enable_slot());
+///
+/// assert!(ring.complete(0x1010));
+/// let d = ring.try_enqueue(TransferRequestBlock::enable_slot()).unwrap();
 /// assert_eq!((d.index, d.transfer_request_block.is_cycle()), (0, false)); // second lap, cycle flipped
 /// assert_eq!(ring.entry_physical_address(d.index), 0x1000);
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ProducerRing {
     pub(crate) base: u64,
     pub(crate) entries: u16,
@@ -43,13 +48,16 @@ pub struct ProducerRing {
     pub(crate) completed: u16,
 }
 
-/// **What [`ProducerRing::enqueue`] says to write**: the TRB at `index`, stamped with this lap's
+/// **What [`ProducerRing::try_enqueue`] says to write**: the TRB at `index`, stamped with this lap's
 /// cycle, and when the ring has just filled its lap, the link TRB at the last index too.
 ///
-/// The driver writes `transfer_request_block` and then `link`, each with the cycle dword last: until
+/// The caller writes `transfer_request_block` and then `link`, each with the cycle dword last: until
 /// a TRB's cycle bit matches, the controller treats it as not yet produced, so the dword that
-/// carries it goes in after the rest. [`ProducerRing::enqueue`] states the order and the barriers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// carries it goes in after the rest. [`ProducerRing::try_enqueue`] states the order and the
+/// barriers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+#[must_use = "the TRB, and on the last entry of a lap the link, must be written to the ring"]
 pub struct TransferRequestBlockPlacement {
     /// Where the TRB goes.
     pub index: u16,
@@ -69,7 +77,9 @@ impl ProducerRing {
     pub const MAXIMUM_SEGMENT_ENTRIES: u16 = 4096;
 
     /// A ring of `entries` TRBs (the last of them the link) at physical `base`, in the state a
-    /// zeroed ring starts in: producer cycle 1, so the zeros read as not produced.
+    /// zeroed ring starts in: producer cycle 1, so the zeros read as not produced. On a controller
+    /// without [`has_64_bit_addressing`](crate::Capabilities::has_64_bit_addressing), `base` and
+    /// every address the ring carries must lie below 4 GiB.
     ///
     /// # Panics
     /// When `entries` is outside [`MINIMUM_SEGMENT_ENTRIES`](Self::MINIMUM_SEGMENT_ENTRIES) to
@@ -114,10 +124,19 @@ impl ProducerRing {
         (self.enqueue + usable - self.completed) % usable
     }
 
-    /// **Place one TRB if the ring has room**, as [`enqueue`](Self::enqueue) does, or `None` when
+    /// **Place one TRB if the ring has room**, and the link if this fills the lap, or `None` when
     /// [`capacity`](Self::capacity) TRBs are already outstanding. The ring knows only what
-    /// [`complete`](Self::complete) has told it, so a caller that uses this reports every
-    /// completion event for the ring there.
+    /// [`complete`](Self::complete) has told it, so the caller reports every completion event for
+    /// the ring there.
+    ///
+    /// The caller then writes the placement to memory in this order (xHCI 1.2 section 4.9.2:
+    /// the controller takes a TRB as produced once its cycle bit matches). First dwords 0 to 2 of
+    /// the TRB at [`entry_physical_address`](Self::entry_physical_address)`(index)`, then a write
+    /// barrier, then dword 3, which holds the cycle bit. The link, when there is one, goes the
+    /// same way after it. Last comes a write barrier that orders all of that memory before the
+    /// doorbell register write. On a weakly ordered machine (aarch64, riscv64) both barriers are
+    /// instructions, not only compiler fences; Linux spells them `wmb()`.
+    #[must_use]
     pub fn try_enqueue(
         &mut self,
         transfer_request_block: TransferRequestBlock,
@@ -133,6 +152,7 @@ impl ProducerRing {
     /// their entries are free for [`try_enqueue`](Self::try_enqueue). Answers `false`, and changes
     /// nothing, when the address is not an outstanding TRB of this ring, such as a stale or
     /// foreign event.
+    #[must_use]
     pub fn complete(&mut self, transfer_request_block_physical_address: u64) -> bool {
         let usable = self.entries - 1;
         let Some(offset) = transfer_request_block_physical_address.checked_sub(self.base) else {
@@ -149,21 +169,10 @@ impl ProducerRing {
         true
     }
 
-    /// **Place one TRB**, and the link if this fills the lap.
-    ///
-    /// This never refuses: the caller keeps at most [`capacity`](Self::capacity) TRBs
-    /// outstanding, counting each one out when its completion event arrives.
-    /// [`try_enqueue`](Self::try_enqueue) does that counting for a caller that reports each event
-    /// through [`complete`](Self::complete).
-    ///
-    /// The caller then writes the placement to memory in this order (xHCI 1.2 section 4.9.2:
-    /// the controller takes a TRB as produced once its cycle bit matches). First dwords 0 to 2 of
-    /// the TRB at [`entry_physical_address`](Self::entry_physical_address)`(index)`, then a write
-    /// barrier, then dword 3, which holds the cycle bit. The link, when there is one, goes the
-    /// same way after it. Last comes a write barrier that orders all of that memory before the
-    /// doorbell register write. On a weakly ordered machine (aarch64, riscv64) both barriers are
-    /// instructions, not only compiler fences; Linux spells them `wmb()`.
-    pub fn enqueue(
+    /// **Place one TRB**, and the link if this fills the lap, however many are outstanding:
+    /// [`try_enqueue`](Self::try_enqueue) checks the count first. Crate-private, so that no
+    /// caller can overwrite a TRB the controller has not reached.
+    pub(crate) fn enqueue(
         &mut self,
         transfer_request_block: TransferRequestBlock,
     ) -> TransferRequestBlockPlacement {
@@ -188,7 +197,23 @@ impl ProducerRing {
 }
 
 /// **The event ring, from the consumer's side**: one segment of `entries` TRBs at a physical base.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// ```
+/// use extensible_host_controller_interface::{EventRing, TransferRequestBlock};
+///
+/// let mut events = EventRing::new(0x3000, 16);
+/// // A zeroed entry has cycle 0, so it is not yet an event.
+/// assert!(!events.is_ready(&TransferRequestBlock::from_dwords([0; 4])));
+/// // The controller writes a Port Status Change Event (type 34) for port 1 with cycle 1.
+/// let written = TransferRequestBlock::from_dwords([1 << 24, 0, 1 << 24, 34 << 10 | 1]);
+/// assert!(events.is_ready(&written));
+/// // Handle it, then advance and write the dequeue pointer to ERDP.
+/// events.advance();
+/// assert_eq!(events.dequeue_pointer(), 0x3010);
+/// // The one segment table entry the ERSTBA register points at.
+/// assert_eq!(events.segment_table_entry(), [0x3000, 0, 16, 0]);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EventRing {
     pub(crate) base: u64,
     pub(crate) entries: u16,
@@ -204,7 +229,11 @@ impl EventRing {
     /// **The most entries an event ring segment may have** (xHCI 1.2 section 6.5, Table 6-95).
     pub const MAXIMUM_SEGMENT_ENTRIES: u16 = 4096;
 
-    /// A zeroed ring: consumer cycle 1, so the zeros read as not yet written.
+    /// A zeroed ring: consumer cycle 1, so the zeros read as not yet written. On a controller
+    /// without [`has_64_bit_addressing`](crate::Capabilities::has_64_bit_addressing), `base` must
+    /// lie below 4 GiB. The ring is one segment, which every controller takes, since
+    /// [`maximum_event_ring_segments`](crate::Capabilities::maximum_event_ring_segments) is at
+    /// least 1.
     ///
     /// # Panics
     /// When `entries` is outside [`MINIMUM_SEGMENT_ENTRIES`](Self::MINIMUM_SEGMENT_ENTRIES) to

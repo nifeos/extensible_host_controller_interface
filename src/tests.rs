@@ -4,6 +4,16 @@ extern crate std;
 use super::*;
 use crate::transfer_request_block::*;
 
+/// Slot `n`, for a test that knows `n` is not 0.
+fn slot_id(n: u8) -> SlotId {
+    SlotId::new(n).unwrap()
+}
+
+/// Device context index `n`, for a test that knows `n` is 1 to 31.
+fn index(n: u8) -> DeviceContextIndex {
+    DeviceContextIndex::new(n).unwrap()
+}
+
 #[test]
 fn events_decode_by_type() {
     // A command completion for Enable Slot, success, slot 1.
@@ -12,8 +22,8 @@ fn events_decode_by_type() {
         Event::decode(t),
         Event::Command {
             transfer_request_block: 0x1000,
-            code: completion::SUCCESS,
-            slot: 1
+            code: CompletionCode::SUCCESS,
+            slot: Some(slot_id(1))
         }
     );
     // A transfer event on endpoint 3 (EP1 IN), short by 2.
@@ -23,13 +33,18 @@ fn events_decode_by_type() {
         Event::Transfer {
             transfer_request_block: 0x7000,
             residual: 2,
-            code: completion::SHORT_PACKET,
-            slot: 1,
-            endpoint: 3
+            code: CompletionCode::SHORT_PACKET,
+            slot: Some(slot_id(1)),
+            endpoint: Some(index(3))
         }
     );
     let t = TransferRequestBlock([5 << 24, 0, 1 << 24, 34 << 10 | 1]);
-    assert_eq!(Event::decode(t), Event::PortStatus { port: 5 });
+    assert_eq!(
+        Event::decode(t),
+        Event::PortStatus {
+            port: PortNumber::new(5)
+        }
+    );
     // A TRB above 4 GiB keeps its high half.
     let t = TransferRequestBlock([0x1000, 0x2, 1 << 24, 33 << 10 | 1 << 24 | 1]);
     assert!(matches!(
@@ -72,21 +87,27 @@ fn a_setup_transfer_request_block_carries_the_packet_and_the_transfer_type() {
     assert_eq!((t.0[3] >> 16) & 3, 3);
     assert!(t.0[3] & IMMEDIATE_DATA != 0);
     // The status stage of an IN transfer flows OUT, and of a no-data transfer flows IN.
-    assert_eq!((TransferRequestBlock::status(true).0[3] >> 16) & 1, 0);
-    assert_eq!((TransferRequestBlock::status(false).0[3] >> 16) & 1, 1);
+    assert_eq!(
+        (TransferRequestBlock::status(Direction::Out).0[3] >> 16) & 1,
+        0
+    );
+    assert_eq!(
+        (TransferRequestBlock::status(Direction::In).0[3] >> 16) & 1,
+        1
+    );
 }
 
 #[test]
 fn the_interval_field_follows_the_speed() {
     // Full speed, 10 ms: 80 microframes, so 2^6 = 64 is the largest period not over it.
-    assert_eq!(interrupt_interval(port::speed::FULL, 10), 6);
-    assert_eq!(interrupt_interval(port::speed::LOW, 1), 3);
-    assert_eq!(interrupt_interval(port::speed::FULL, 255), 10);
-    assert_eq!(interrupt_interval(port::speed::FULL, 0), 3);
+    assert_eq!(interrupt_interval(PortSpeed::FULL, 10), 6);
+    assert_eq!(interrupt_interval(PortSpeed::LOW, 1), 3);
+    assert_eq!(interrupt_interval(PortSpeed::FULL, 255), 10);
+    assert_eq!(interrupt_interval(PortSpeed::FULL, 0), 3);
     // High speed states an exponent plus one.
-    assert_eq!(interrupt_interval(port::speed::HIGH, 4), 3);
-    assert_eq!(interrupt_interval(port::speed::HIGH, 0), 0);
-    assert_eq!(interrupt_interval(port::speed::SUPER, 200), 15);
+    assert_eq!(interrupt_interval(PortSpeed::HIGH, 4), 3);
+    assert_eq!(interrupt_interval(PortSpeed::HIGH, 0), 0);
+    assert_eq!(interrupt_interval(PortSpeed::SUPER, 200), 15);
 }
 
 /// Every full-speed `bInterval` gives an exponent from 3 to 10 whose period does not exceed it
@@ -94,7 +115,7 @@ fn the_interval_field_follows_the_speed() {
 #[test]
 fn every_full_speed_interval_lands_in_the_specification_range() {
     for descriptor_interval in 0..=u8::MAX {
-        let field = interrupt_interval(port::speed::FULL, descriptor_interval);
+        let field = interrupt_interval(PortSpeed::FULL, descriptor_interval);
         let microframes = u32::from(descriptor_interval.max(1)) * 8;
         assert!((3..=10).contains(&field), "{descriptor_interval}");
         assert!(1u32 << field <= microframes, "{descriptor_interval}");
@@ -102,7 +123,7 @@ fn every_full_speed_interval_lands_in_the_specification_range() {
     }
 }
 
-/// **A simulated controller consuming what the driver produces**: it reads from its dequeue
+/// **A simulated controller consuming what the caller produces**: it reads from its dequeue
 /// index while the cycle bit matches its own, follows a link TRB and toggles its cycle when the
 /// link says so (xHCI 1.2 section 4.9.2), and returns what it ran. Three laps of a four-entry
 /// ring, so every wrap and every link is exercised: the controller must run exactly the TRBs
@@ -155,7 +176,7 @@ fn a_simulated_controller_runs_exactly_what_was_produced_across_laps() {
             run(&memory, &mut dequeue, &mut consumer_cycle_state),
             produced
         );
-        // Where the controller stopped is where the driver will write next.
+        // Where the controller stopped is where the caller will write next.
         assert_eq!(ring.dequeue_pointer() & !1, base + u64::from(dequeue) * 16);
         assert_eq!(ring.dequeue_pointer() & 1 != 0, consumer_cycle_state);
     }
@@ -164,7 +185,7 @@ fn a_simulated_controller_runs_exactly_what_was_produced_across_laps() {
 /// **The three shapes of a control transfer**, as a controller reads them: the setup stage's
 /// transfer type must agree with the data stage's direction, and the status stage flows the
 /// other way (xHCI 1.2 section 4.11.2.2). Only the status stage asks for an event on success,
-/// which is what the driver waits for; the data stage asks only on a short packet.
+/// which is what the caller waits for; the data stage asks only on a short packet.
 #[test]
 fn control_transfers_agree_on_direction_in_all_three_shapes() {
     for (shape, data_in, transfer_type, status_in) in [
@@ -172,14 +193,21 @@ fn control_transfers_agree_on_direction_in_all_three_shapes() {
         (TransferType::HostToDevice, Some(false), 2, true),
         (TransferType::DeviceToHost, Some(true), 3, false),
     ] {
+        let direction = |inbound: bool| {
+            if inbound {
+                Direction::In
+            } else {
+                Direction::Out
+            }
+        };
         let setup = TransferRequestBlock::setup(0, shape);
         assert_eq!((setup.0[3] >> 16) & 3, transfer_type);
-        let status = TransferRequestBlock::status(data_in == Some(true));
+        let status = TransferRequestBlock::status(direction(status_in));
         assert_eq!(status.kind(), transfer_request_block_type::STATUS);
         assert_eq!((status.0[3] >> 16) & 1 != 0, status_in);
         assert!(status.0[3] & INTERRUPT_ON_COMPLETION != 0);
         if let Some(inbound) = data_in {
-            let data = TransferRequestBlock::data(0x1_2345_6000, 18, inbound);
+            let data = TransferRequestBlock::data(0x1_2345_6000, 18, direction(inbound));
             assert_eq!(data.kind(), transfer_request_block_type::DATA);
             assert_eq!((data.0[0], data.0[1], data.0[2]), (0x2345_6000, 1, 18));
             assert_eq!((data.0[3] >> 16) & 1 != 0, inbound);
@@ -220,11 +248,11 @@ fn every_command_decodes_back_to_its_slot_endpoint_and_pointer() {
         (transfer_request_block_type::ENABLE_SLOT, 0, 0, 0)
     );
     assert_eq!(
-        decode(TransferRequestBlock::disable_slot(7)),
+        decode(TransferRequestBlock::disable_slot(slot_id(7))),
         (transfer_request_block_type::DISABLE_SLOT, 7, 0, 0)
     );
     assert_eq!(
-        decode(TransferRequestBlock::address_device(0x5000, 1)),
+        decode(TransferRequestBlock::address_device(0x5000, slot_id(1))),
         (
             transfer_request_block_type::DEVICE_ADDRESSING_COMMAND,
             1,
@@ -233,7 +261,7 @@ fn every_command_decodes_back_to_its_slot_endpoint_and_pointer() {
         )
     );
     assert_eq!(
-        decode(TransferRequestBlock::configure_endpoint(0x5000, 2)),
+        decode(TransferRequestBlock::configure_endpoint(0x5000, slot_id(2))),
         (
             transfer_request_block_type::CONFIGURE_ENDPOINT,
             2,
@@ -242,15 +270,19 @@ fn every_command_decodes_back_to_its_slot_endpoint_and_pointer() {
         )
     );
     assert_eq!(
-        decode(TransferRequestBlock::evaluate_context(0x5000, 3)),
+        decode(TransferRequestBlock::evaluate_context(0x5000, slot_id(3))),
         (transfer_request_block_type::EVALUATE_CONTEXT, 3, 0, 0x5000)
     );
     assert_eq!(
-        decode(TransferRequestBlock::reset_endpoint(1, 3)),
+        decode(TransferRequestBlock::reset_endpoint(slot_id(1), index(3))),
         (transfer_request_block_type::RESET_ENDPOINT, 1, 3, 0)
     );
     assert_eq!(
-        decode(TransferRequestBlock::set_dequeue(0x7001, 1, 3)),
+        decode(TransferRequestBlock::set_dequeue(
+            0x7001,
+            slot_id(1),
+            index(3)
+        )),
         (
             transfer_request_block_type::SET_TRANSFER_RING_DEQUEUE_POINTER,
             1,
@@ -258,10 +290,17 @@ fn every_command_decodes_back_to_its_slot_endpoint_and_pointer() {
             0x7001
         )
     );
-    // An event type this driver does not act on decodes as itself, never as a known one.
+    // An event type the crate does not decode decodes as itself, never as a known one.
     assert_eq!(
-        Event::decode(TransferRequestBlock([0, 0, 0, 37 << 10])),
-        Event::Other { kind: 37 }
+        Event::decode(TransferRequestBlock([0, 0, 0, 38 << 10])),
+        Event::Other { kind: 38 }
+    );
+    // A Host Controller Event keeps its code: Event Ring Full is 21.
+    assert_eq!(
+        Event::decode(TransferRequestBlock([0, 0, 21 << 24, 37 << 10 | 1])),
+        Event::HostController {
+            code: CompletionCode::EVENT_RING_FULL_ERROR
+        }
     );
     let ring = EventRing::new(0x2000, 16);
     assert_eq!(ring.index(), 0);
@@ -354,16 +393,50 @@ fn each_endpoint_type_writes_its_own_code() {
     }
 }
 
-/// **A device context index above 31 stays in the five-bit Endpoint ID** of Reset Endpoint and
-/// Set TR Dequeue Pointer (xHCI 1.2 sections 6.4.3.7 and 6.4.3.9): bits 21 to 23 read zero.
+/// **No device context index leaves the five-bit Endpoint ID** of Reset Endpoint and Set TR
+/// Dequeue Pointer (xHCI 1.2 sections 6.4.3.7 and 6.4.3.9): 32 is refused before a builder sees
+/// it, and the largest, 31, fills the field with bits 21 to 23 still zero.
 #[test]
 fn an_endpoint_index_above_thirty_one_stays_in_its_field() {
+    assert_eq!(DeviceContextIndex::new(32), None);
+    assert_eq!(DeviceContextIndex::new(0), None);
     for built in [
-        TransferRequestBlock::reset_endpoint(1, 0xff),
-        TransferRequestBlock::set_dequeue(0x1000, 1, 0xff),
+        TransferRequestBlock::reset_endpoint(slot_id(1), index(31)),
+        TransferRequestBlock::set_dequeue(0x1000, slot_id(1), index(31)),
     ] {
         assert_eq!(built.0[3] >> 16 & 0xff, 0x1f);
     }
+}
+
+/// **Each number refuses the values the specification reserves**, and gives back the rest.
+#[test]
+fn each_identity_refuses_its_reserved_values() {
+    assert_eq!(SlotId::new(0), None);
+    assert_eq!(SlotId::new(255).map(SlotId::get), Some(255));
+    assert_eq!(
+        DeviceContextIndex::new(1).map(DeviceContextIndex::get),
+        Some(1)
+    );
+    assert_eq!(
+        DeviceContextIndex::new(31).map(DeviceContextIndex::get),
+        Some(31)
+    );
+    assert_eq!(PortNumber::new(0), None);
+    assert_eq!(PortNumber::new(255).map(PortNumber::get), Some(255));
+    assert_eq!(PortSpeed::new(0), None);
+    assert_eq!(PortSpeed::new(16), None);
+    assert_eq!(PortSpeed::new(15).map(PortSpeed::get), Some(15));
+    assert_eq!(
+        [
+            PortSpeed::FULL,
+            PortSpeed::LOW,
+            PortSpeed::HIGH,
+            PortSpeed::SUPER,
+            PortSpeed::SUPER_PLUS
+        ]
+        .map(PortSpeed::get),
+        [1, 2, 3, 4, 5]
+    );
 }
 
 /// **Every completion code has its specification name** (xHCI 1.2 Table 6-90): the 36 defined
@@ -411,21 +484,21 @@ fn every_completion_code_has_its_specification_name() {
         "Reserved",
     ];
     for (code, expected) in (0..).zip(table) {
-        assert_eq!(completion::name(code), expected, "code {code}");
+        assert_eq!(CompletionCode::new(code).name(), expected, "code {code}");
     }
-    assert_eq!(completion::name(completion::STALL), "Stall Error");
+    assert_eq!(CompletionCode::STALL.name(), "Stall Error");
     assert_eq!(
-        completion::name(completion::SPLIT_TRANSACTION_ERROR),
+        CompletionCode::SPLIT_TRANSACTION_ERROR.name(),
         "Split Transaction Error"
     );
     for code in 37..=191 {
-        assert_eq!(completion::name(code), "Reserved");
+        assert_eq!(CompletionCode::new(code).name(), "Reserved");
     }
     for code in 192..=223 {
-        assert_eq!(completion::name(code), "Vendor Defined Error");
+        assert_eq!(CompletionCode::new(code).name(), "Vendor Defined Error");
     }
     for code in 224..=255 {
-        assert_eq!(completion::name(code), "Vendor Defined Info");
+        assert_eq!(CompletionCode::new(code).name(), "Vendor Defined Info");
     }
 }
 
@@ -472,8 +545,10 @@ fn complete_refuses_what_is_not_outstanding() {
     let a = ring
         .try_enqueue(TransferRequestBlock::enable_slot())
         .unwrap();
-    ring.try_enqueue(TransferRequestBlock::enable_slot())
-        .unwrap();
+    assert!(
+        ring.try_enqueue(TransferRequestBlock::enable_slot())
+            .is_some()
+    );
     let before = ring;
     for physical_address in [0xff0, 0x1008, 0x1030, 0x1040, 0x1020] {
         assert!(!ring.complete(physical_address), "{physical_address:#x}");
@@ -495,27 +570,58 @@ fn complete_refuses_what_is_not_outstanding() {
 fn complete_counts_by_entry_index_across_the_wrap() {
     let mut ring = ProducerRing::new(0x1000, 4);
     for _ in 0..2 {
-        ring.try_enqueue(TransferRequestBlock::enable_slot())
-            .unwrap();
+        assert!(
+            ring.try_enqueue(TransferRequestBlock::enable_slot())
+                .is_some()
+        );
     }
     assert!(ring.complete(0x1010));
-    ring.try_enqueue(TransferRequestBlock::enable_slot())
-        .unwrap();
-    ring.try_enqueue(TransferRequestBlock::enable_slot())
-        .unwrap();
+    assert!(
+        ring.try_enqueue(TransferRequestBlock::enable_slot())
+            .is_some()
+    );
+    assert!(
+        ring.try_enqueue(TransferRequestBlock::enable_slot())
+            .is_some()
+    );
     let before = ring;
     assert!(!ring.complete(0x1030));
     assert_eq!(ring, before);
 
     let mut ring = ProducerRing::new(0x1000, 8);
     for _ in 0..3 {
-        ring.try_enqueue(TransferRequestBlock::enable_slot())
-            .unwrap();
+        assert!(
+            ring.try_enqueue(TransferRequestBlock::enable_slot())
+                .is_some()
+        );
     }
     assert!(ring.complete(0x1010));
     for _ in 0..5 {
-        ring.try_enqueue(TransferRequestBlock::enable_slot())
-            .unwrap();
+        assert!(
+            ring.try_enqueue(TransferRequestBlock::enable_slot())
+                .is_some()
+        );
     }
     assert_eq!(ring.try_enqueue(TransferRequestBlock::enable_slot()), None);
+}
+
+/// A TRB's dwords come back as they went in, and the Interrupt On Completion question reads bit 5
+/// of dword 3 alone.
+#[test]
+fn a_transfer_request_block_round_trips_its_dwords() {
+    let words = [0x1234_5678, 0x9abc_def0, 0x0fed_cba9, 0x8765_4321];
+    assert_eq!(TransferRequestBlock::from_dwords(words).dwords(), words);
+    assert!(TransferRequestBlock::from_dwords([0, 0, 0, 1 << 5]).interrupt_on_completion());
+    assert!(!TransferRequestBlock::from_dwords([!0, !0, !0, !(1 << 5)]).interrupt_on_completion());
+    assert!(TransferRequestBlock::status(Direction::In).interrupt_on_completion());
+    assert!(!TransferRequestBlock::setup(0, TransferType::NoDataStage).interrupt_on_completion());
+}
+
+/// The byte form puts each dword's least significant byte first, and reads back to the same TRB.
+#[test]
+fn a_transfer_request_block_has_a_little_endian_byte_form() {
+    let t = TransferRequestBlock::from_dwords([0x0403_0201, 0x0807_0605, 0x0c0b_0a09, 0x100f_0e0d]);
+    let bytes = t.to_le_bytes();
+    assert_eq!(bytes, core::array::from_fn(|i| i as u8 + 1));
+    assert_eq!(TransferRequestBlock::from_le_bytes(bytes), t);
 }

@@ -1,6 +1,13 @@
 use super::*;
 use crate::registers::find_extended;
 
+/// Any value `make` accepts: a byte Kani chooses, kept to the ones `make` does not refuse.
+fn any_of<T>(make: fn(u8) -> Option<T>) -> T {
+    let made = make(kani::any());
+    kani::assume(made.is_some());
+    made.unwrap()
+}
+
 /// Falsification: replayable `falsifications/verification.a_producer_ring_stays_in_bounds.patch`
 /// **A producer ring never places a TRB on its link slot or past the end**, and places the link
 /// exactly on the last slot, from every reachable state of every ring size
@@ -109,15 +116,16 @@ fn a_device_context_index_is_one_to_thirty_one_and_distinct() {
     let address: u8 = kani::any();
     let other: u8 = kani::any();
     let index = context::endpoint_index(address);
-    assert!((1..=31).contains(&index));
+    assert!((1..=31).contains(&index.get()));
     if address & 0x0f == 0 {
-        assert_eq!(index, 1);
+        assert_eq!(index.get(), 1);
     }
     let same_endpoint = address & 0x8f == other & 0x8f;
     if address & 0x0f != 0 && other & 0x0f != 0 && !same_endpoint {
         assert_ne!(index, context::endpoint_index(other));
     }
     let context_bytes: u64 = if kani::any() { 32 } else { 64 };
+    let index = index.get();
     assert!(context::device_offset(index, context_bytes) + context_bytes <= 32 * context_bytes);
     assert!(context::input_offset(index + 1, context_bytes) + context_bytes <= 33 * context_bytes);
 }
@@ -125,18 +133,18 @@ fn a_device_context_index_is_one_to_thirty_one_and_distinct() {
 /// Falsification: replayable `falsifications/verification.a_slot_context_keeps_each_field_in_its_own_bits.patch`
 /// **A slot context holds each field in its own bits, for every input.** What goes in comes back
 /// out of exactly the field the specification gives it (xHCI 1.2 section 6.2.2), and no field
-/// spills into a neighbor: the speed and the context count are masked to their widths, and the
-/// reserved dwords stay zero.
+/// spills into a neighbor: the speed id and the context count fit their widths by their types,
+/// and the reserved bits and dwords stay zero.
 #[kani::proof]
 fn a_slot_context_keeps_each_field_in_its_own_bits() {
-    let speed: u8 = kani::any();
-    let port: u8 = kani::any();
-    let entries: u8 = kani::any();
+    let speed = any_of(PortSpeed::new);
+    let port = any_of(PortNumber::new);
+    let entries = any_of(DeviceContextIndex::new);
     let slot = context::slot(speed, port, entries);
-    assert_eq!((slot[0] >> 20) & 0xf, speed as u32 & 0xf);
-    assert_eq!(slot[0] >> 27, entries as u32 & 0x1f);
+    assert_eq!((slot[0] >> 20) & 0xf, speed.get() as u32);
+    assert_eq!(slot[0] >> 27, entries.get() as u32);
     assert_eq!(slot[0] & !((0xf << 20) | (0x1f << 27)), 0);
-    assert_eq!(slot[1], (port as u32) << 16);
+    assert_eq!(slot[1], (port.get() as u32) << 16);
     assert_eq!(slot[2..], [0; 6]);
 }
 
@@ -200,9 +208,8 @@ fn a_port_write_never_acknowledges_what_nobody_asked_to() {
     assert_eq!(nothing & port::CHANGES, 0);
     assert_eq!(nothing & port::ENABLED, 0);
     assert_eq!(nothing & port::RESET, 0);
-    assert!(port::speed_of(port_status_and_control) <= 0xf);
     assert_eq!(
-        port::speed_of(port_status_and_control) as u32,
+        port::speed_of(port_status_and_control).map_or(0, PortSpeed::get) as u32,
         (port_status_and_control >> 10) & 0xf
     );
 }
@@ -215,10 +222,10 @@ fn a_port_write_never_acknowledges_what_nobody_asked_to() {
 /// at most 15. `default_control_packet` answers for speeds 1 to 5 and for no other id.
 #[kani::proof]
 fn the_interrupt_interval_is_the_exponent_the_specification_asks_for() {
-    let speed: u8 = kani::any();
+    let speed = any_of(PortSpeed::new);
     let b_interval: u8 = kani::any();
     let interval = context::interrupt_interval(speed, b_interval);
-    if speed == port::speed::FULL || speed == port::speed::LOW {
+    if speed == PortSpeed::FULL || speed == PortSpeed::LOW {
         let microframes = (if b_interval == 0 { 1 } else { b_interval }) as u32 * 8;
         assert!((3..=10).contains(&interval));
         assert!(1u32 << interval <= microframes);
@@ -234,7 +241,7 @@ fn the_interrupt_interval_is_the_exponent_the_specification_asks_for() {
     }
     assert_eq!(
         port::default_control_packet(speed).is_some(),
-        (1..=5).contains(&speed)
+        (1..=5).contains(&speed.get())
     );
 }
 
@@ -243,7 +250,8 @@ fn the_interrupt_interval_is_the_exponent_the_specification_asks_for() {
 /// bits**, for any four dwords the controller writes (xHCI 1.2 sections 6.4.2.1 to 6.4.2.3). The
 /// Transfer Event's pointer reassembles from dwords 0 and 1, its residual is the 24-bit length,
 /// its completion code is the top byte of dword 2, its endpoint is the five-bit Endpoint ID and its
-/// slot is the top byte of dword 3. The cycle bit never changes what an event says.
+/// slot is the top byte of dword 3. A Host Controller Event's code is the top byte of dword 2.
+/// The cycle bit never changes what an event says.
 #[kani::proof]
 fn every_event_decodes_from_the_bits_the_specification_gives() {
     let words: [u32; 4] = kani::any();
@@ -261,9 +269,12 @@ fn every_event_decodes_from_the_bits_the_specification_gives() {
             assert_eq!(kind, transfer_request_block_type::TRANSFER_EVENT);
             assert_eq!(transfer_request_block, pointer);
             assert_eq!(residual, words[2] & 0x00ff_ffff);
-            assert_eq!(code as u32, words[2] >> 24);
-            assert_eq!(endpoint as u32, (words[3] >> 16) & 0x1f);
-            assert_eq!(slot as u32, words[3] >> 24);
+            assert_eq!(code.get() as u32, words[2] >> 24);
+            assert_eq!(
+                endpoint.map_or(0, DeviceContextIndex::get) as u32,
+                (words[3] >> 16) & 0x1f
+            );
+            assert_eq!(slot.map_or(0, SlotId::get) as u32, words[3] >> 24);
         }
         Event::Command {
             transfer_request_block,
@@ -272,12 +283,16 @@ fn every_event_decodes_from_the_bits_the_specification_gives() {
         } => {
             assert_eq!(kind, transfer_request_block_type::COMMAND_COMPLETION);
             assert_eq!(transfer_request_block, pointer);
-            assert_eq!(code as u32, words[2] >> 24);
-            assert_eq!(slot as u32, words[3] >> 24);
+            assert_eq!(code.get() as u32, words[2] >> 24);
+            assert_eq!(slot.map_or(0, SlotId::get) as u32, words[3] >> 24);
         }
         Event::PortStatus { port } => {
             assert_eq!(kind, transfer_request_block_type::PORT_STATUS_CHANGE);
-            assert_eq!(port as u32, words[0] >> 24);
+            assert_eq!(port.map_or(0, PortNumber::get) as u32, words[0] >> 24);
+        }
+        Event::HostController { code } => {
+            assert_eq!(kind, transfer_request_block_type::HOST_CONTROLLER_EVENT);
+            assert_eq!(code.get() as u32, words[2] >> 24);
         }
         Event::Other { kind: other } => {
             assert_eq!(other, kind);
@@ -285,6 +300,7 @@ fn every_event_decodes_from_the_bits_the_specification_gives() {
                 kind != transfer_request_block_type::TRANSFER_EVENT
                     && kind != transfer_request_block_type::COMMAND_COMPLETION
                     && kind != transfer_request_block_type::PORT_STATUS_CHANGE
+                    && kind != transfer_request_block_type::HOST_CONTROLLER_EVENT
             );
         }
     }
@@ -302,15 +318,20 @@ fn every_event_decodes_from_the_bits_the_specification_gives() {
 #[kani::proof]
 fn every_command_trb_puts_its_slot_endpoint_and_pointer_in_their_fields() {
     let pointer: u64 = kani::any();
-    let slot: u8 = kani::any();
-    let index: u8 = kani::any();
+    let slot = any_of(SlotId::new);
+    let index = any_of(DeviceContextIndex::new);
     let len: u16 = kani::any();
     let inbound: bool = kani::any();
+    let direction = if inbound {
+        Direction::In
+    } else {
+        Direction::Out
+    };
     let type_bits = 0x3f << 10;
     let slot_bits = 0xff << 24;
     let endpoint_bits = 0x1f << 16;
-    let slot_field = (slot as u32) << 24;
-    let endpoint_field = (index as u32 & 0x1f) << 16;
+    let slot_field = (slot.get() as u32) << 24;
+    let endpoint_field = (index.get() as u32) << 16;
     let lo = pointer as u32;
     let hi = (pointer >> 32) as u32;
 
@@ -362,13 +383,13 @@ fn every_command_trb_puts_its_slot_endpoint_and_pointer_in_their_fields() {
     );
 
     for built in [
-        TransferRequestBlock::data(pointer, len, inbound),
+        TransferRequestBlock::data(pointer, len, direction),
         TransferRequestBlock::normal(pointer, len),
     ] {
         assert_eq!(built.0[..3], [lo, hi, len as u32]);
         assert!(!built.is_cycle());
     }
-    let data = TransferRequestBlock::data(pointer, len, inbound);
+    let data = TransferRequestBlock::data(pointer, len, direction);
     assert_eq!(data.kind(), transfer_request_block_type::DATA);
     assert_eq!(data.0[3] >> 16 & 1 != 0, inbound);
     assert_eq!(
@@ -381,8 +402,9 @@ fn every_command_trb_puts_its_slot_endpoint_and_pointer_in_their_fields() {
 /// **The capability registers decode each field from exactly its own bits, at its own width**,
 /// for any six dwords (xHCI 1.2 section 5.3). `CAPLENGTH` is a byte, `MaxSlots` a byte,
 /// `MaxIntrs` eleven bits, `MaxPorts` a byte, the scratchpad count ten bits from its two halves,
-/// the extended capabilities pointer a dword offset, and the doorbell and runtime offsets keep
-/// their reserved low bits clear.
+/// the extended capabilities pointer a dword offset, the doorbell and runtime offsets keep their
+/// reserved low bits clear, 64-bit addressing is bit 0 of `HCCPARAMS1`, and the event ring segment
+/// bound is 2 to the power of `HCSPARAMS2` bits 4 to 7.
 #[kani::proof]
 fn the_capability_registers_decode_each_field_from_its_own_bits() {
     let length: u32 = kani::any();
@@ -399,29 +421,34 @@ fn the_capability_registers_decode_each_field_from_its_own_bits() {
         doorbell,
         runtime,
     );
-    assert_eq!(capabilities.operational, (length & 0xff) as u64);
-    assert_eq!(capabilities.version as u32, length >> 16);
-    assert_eq!(capabilities.maximum_slots as u32, structural_1 & 0xff);
+    assert_eq!(capabilities.operational(), (length & 0xff) as u64);
+    assert_eq!(capabilities.version() as u32, length >> 16);
+    assert_eq!(capabilities.maximum_slots() as u32, structural_1 & 0xff);
     assert_eq!(
-        capabilities.maximum_interrupters as u32,
+        capabilities.maximum_interrupters() as u32,
         (structural_1 >> 8) & 0x7ff
     );
-    assert!(capabilities.maximum_interrupters < 1 << 11);
-    assert_eq!(capabilities.maximum_ports as u32, structural_1 >> 24);
+    assert!(capabilities.maximum_interrupters() < 1 << 11);
+    assert_eq!(capabilities.maximum_ports() as u32, structural_1 >> 24);
     let high = (structural_2 >> 21) & 0x1f;
     let low = structural_2 >> 27;
-    assert_eq!(capabilities.scratchpads as u32, high << 5 | low);
-    assert!(capabilities.scratchpads < 1 << 10);
+    assert_eq!(capabilities.scratchpads() as u32, high << 5 | low);
+    assert!(capabilities.scratchpads() < 1 << 10);
     assert_eq!(
-        capabilities.context_bytes,
+        capabilities.context_bytes(),
         if parameters_1 & 1 << 2 != 0 { 64 } else { 32 }
     );
-    assert_eq!(capabilities.extended, ((parameters_1 >> 16) as u64) * 4);
-    assert_eq!(capabilities.extended % 4, 0);
-    assert_eq!(capabilities.doorbells, (doorbell as u64) & !0x3);
-    assert_eq!(capabilities.doorbells >> 2, (doorbell >> 2) as u64);
-    assert_eq!(capabilities.runtime, (runtime as u64) & !0x1f);
-    assert_eq!(capabilities.runtime >> 5, (runtime >> 5) as u64);
+    assert_eq!(capabilities.extended(), ((parameters_1 >> 16) as u64) * 4);
+    assert_eq!(capabilities.extended() % 4, 0);
+    assert_eq!(capabilities.doorbells(), (doorbell as u64) & !0x3);
+    assert_eq!(capabilities.doorbells() >> 2, (doorbell >> 2) as u64);
+    assert_eq!(capabilities.runtime(), (runtime as u64) & !0x1f);
+    assert_eq!(capabilities.runtime() >> 5, (runtime >> 5) as u64);
+    assert_eq!(capabilities.has_64_bit_addressing(), parameters_1 & 1 != 0);
+    assert_eq!(
+        capabilities.maximum_event_ring_segments() as u32,
+        1 << ((structural_2 >> 4) & 0xf)
+    );
 }
 
 /// Falsification: replayable `falsifications/verification.the_port_debounce_answers_by_its_timeout.patch`

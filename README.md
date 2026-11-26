@@ -15,18 +15,24 @@ suits a model checker. It does not touch hardware, allocate, or drive a controll
 ## EXAMPLES
 
 ```rust
-use extensible_host_controller_interface::{Capabilities, ProducerRing, TransferRequestBlock};
+use extensible_host_controller_interface::{
+    Capabilities, PortNumber, ProducerRing, TransferRequestBlock,
+};
 
 // QEMU's qemu-xhci: 0x40 bytes of capability registers, 64 slots, 16 interrupters and 8 ports
 // (4 USB 2 and 4 USB 3, the defaults), runtime at 0x1000, doorbells at 0x2000. Port 1's status
 // register and the command ring's doorbell:
 let caps = Capabilities::decode(0x0100_0040, 0x0800_1040, 0, 0x0000_7000, 0x2000, 0x1000);
-assert_eq!((caps.port_status_and_control(1), caps.doorbell(0)), (Some(0x440), 0x2000));
+let port_1 = PortNumber::new(1).unwrap();
+assert_eq!(caps.port_status_and_control(port_1), Some(0x440));
+assert_eq!(caps.doorbell(0), Some(0x2000));
 
 // A four-entry command ring: three usable slots, then a link TRB back to the first.
 let mut ring = ProducerRing::new(0x1000, 4);
-let a = ring.enqueue(TransferRequestBlock::enable_slot());
+let a = ring.try_enqueue(TransferRequestBlock::enable_slot()).unwrap();
 assert_eq!((a.index, a.transfer_request_block.is_cycle(), a.link), (0, true, None));
+// When the Command Completion Event names that TRB, report it, which frees its entry.
+assert!(ring.complete(0x1000));
 ```
 
 The caller writes each placed TRB (and the link, when `link` is `Some`) to DMA memory at
@@ -36,6 +42,10 @@ The caller writes each placed TRB (and the link, when `link` is `Some`) to DMA m
 memory: the driver places it with `try_enqueue`, and the fake consumes the transfer ring and
 writes a Transfer Event. The driver then decodes the event and reports it with `complete`. Run it
 with `cargo run --example fake_controller`.
+
+The crate fixes no layout for the DMA memory: the caller places each ring, context and buffer.
+`examples/boot_keyboard_layout.rs` shows one layout, a page for each structure of a single-slot
+boot-keyboard driver. Run it with `cargo run --example boot_keyboard_layout`.
 
 ## What is proven
 
@@ -93,10 +103,10 @@ a barrier instruction (Linux spells them `wmb()` and `rmb()`).
 
 To produce a TRB on a command or transfer ring:
 
-1. Keep at most `ring.capacity()` TRBs outstanding: placed, with no completion event yet.
-   `ring.try_enqueue` counts them, and refuses at capacity, for a caller that reports each
-   completion event's TRB pointer to `ring.complete`. `ring.enqueue` never refuses.
-2. Call `ring.enqueue`, then write dwords 0 to 2 of the placed TRB at
+1. Report each completion event's TRB pointer to `ring.complete`. The ring counts the TRBs
+   outstanding (placed, with no completion event yet) from those reports, and
+   `ring.try_enqueue` refuses once `ring.capacity()` of them are.
+2. Call `ring.try_enqueue`, then write dwords 0 to 2 of the placed TRB at
    `ring.entry_physical_address(index)` with volatile writes.
 3. Issue a write barrier, then write dword 3, which holds the cycle bit. Until that bit matches,
    the controller treats the TRB as not yet produced (xHCI 1.2 section 4.9.2).
@@ -177,16 +187,15 @@ the assertion that the patch breaks. `git checkout -- src` reverts the patch.
 
 - Hubs are not modeled (route string 0), so the crate cannot address a device behind a hub. Only devices
   on the root ports work.
-- One page size: the DMA layout assumes 4 KiB pages (`PAGESIZE` bit 0).
-- Speeds are the default ids in `port::speed`. A controller whose Supported Protocol capability
+- Speeds are the default ids, the associated constants of `PortSpeed`. A controller whose Supported Protocol capability
   has a speed id count other than 0 defines its own, and the crate does not decode its Protocol
   Speed ID dwords.
 - No streams, isochronous or bulk transfers: the crate builds the TRBs a boot keyboard needs and
-  nothing more.
-- `ProducerRing::enqueue` never refuses a TRB, and `ProducerRing::try_enqueue` refuses at
-  `ProducerRing::capacity` only while the caller reports every completion through
-  `ProducerRing::complete`. Past capacity, the next lap overwrites a TRB the controller has not
-  reached.
+  nothing more. The data builders take a `u16` length, so one TRB carries at most 65,535 bytes of
+  the 65,536 the Transfer Length field allows.
+- `ProducerRing::try_enqueue` refuses at `ProducerRing::capacity` only while the caller reports
+  every completion through `ProducerRing::complete`. A caller that stops reporting sees the ring
+  fill and refuse, not overwrite: the ring cannot see the controller's dequeue pointer.
 - The TRB builders do not check the 64 KiB rule: a data buffer must not cross a 64 KiB boundary
   (xHCI 1.2 section 6.4.1). `fits_one_transfer_request_block` says whether one does, and the
   caller chains several TRBs for a buffer that crosses one.

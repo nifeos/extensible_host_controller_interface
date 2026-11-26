@@ -1,12 +1,11 @@
 #![no_std]
 #![forbid(unsafe_code)]
 //! **The extensible host controller interface (xHCI), as pure logic**: everything a USB host
-//! controller driver computes, with nothing it touches. A kernel finds and confines the register
-//! file and direct memory access (DMA) memory and a user-space driver drives them; this is the
-//! arithmetic between.
+//! controller driver computes, with nothing it touches. The caller maps the register file and the
+//! direct memory access (DMA) memory and performs every access to them; this is the arithmetic
+//! between.
 //!
-//! [`registers`] and [`Capabilities`] name the registers; [`direct_memory_access`] is the DMA region's layout; a
-//! Transfer Request Block (TRB, [`TransferRequestBlock`]), [`Event`], [`ProducerRing`] and
+//! [`registers`] and [`Capabilities`] name the registers; a Transfer Request Block (TRB, [`TransferRequestBlock`]), [`Event`], [`ProducerRing`] and
 //! [`EventRing`] are the ring discipline (xHCI 1.2, chapters 4 and 6); [`context`] holds slot and
 //! endpoint contexts; [`extended_capabilities`] holds the extended capability ids; [`port`] is the
 //! port status register.
@@ -16,13 +15,16 @@
 //! Decode the capability registers, then place a TRB on a command ring:
 //!
 //! ```
-//! use extensible_host_controller_interface::{Capabilities, ProducerRing, TransferRequestBlock};
+//! use extensible_host_controller_interface::{
+//!     Capabilities, PortNumber, ProducerRing, TransferRequestBlock,
+//! };
 //!
 //! // QEMU's qemu-xhci: 0x40 bytes of capability registers, 64 slots, 16 interrupters and 8
 //! // ports, runtime at 0x1000, doorbells at 0x2000.
 //! let capabilities = Capabilities::decode(0x0100_0040, 0x0800_1040, 0, 0x0000_7000, 0x2000, 0x1000);
-//! assert_eq!(capabilities.port_status_and_control(1), Some(0x440));
-//! assert_eq!(capabilities.doorbell(0), 0x2000);
+//! let port_1 = PortNumber::new(1).unwrap();
+//! assert_eq!(capabilities.port_status_and_control(port_1), Some(0x440));
+//! assert_eq!(capabilities.doorbell(0), Some(0x2000));
 //!
 //! // A four-entry command ring: three usable slots, then a link TRB back to the first.
 //! let mut ring = ProducerRing::new(0x1000, 4);
@@ -35,19 +37,21 @@
 //! ```
 //!
 //! `examples/fake_controller.rs` in the repository runs whole control transfers against a
-//! simulated controller.
+//! simulated controller, and `examples/boot_keyboard_layout.rs` lays out one driver's DMA region.
+//! The crate itself fixes no layout.
 
 //! # BUGS
 //!
-//! - One page size: [`direct_memory_access`] assumes 4 KiB (`PAGESIZE` bit 0), and the driver refuses otherwise.
-//! - No streams, isochronous or bulk: the TRBs a keyboard needs and nothing more.
-//! - Speeds are the default ids in [`port::speed`]: a controller whose
+//! - No streams, isochronous or bulk: the TRBs a keyboard needs and nothing more. The data
+//!   builders take a `u16` length, so one TRB carries at most 65,535 bytes of the 65,536 the
+//!   Transfer Length field allows.
+//! - Speeds are the default ids, the associated constants of [`PortSpeed`]: a controller whose
 //!   [`extended_capabilities::SupportedProtocol::speed_id_count`] is not 0 defines its own, and
 //!   nothing here decodes its Protocol Speed ID dwords.
 //! - Hubs are not modeled (route string 0), so a device behind a hub cannot be addressed.
-//! - [`ProducerRing::enqueue`] never refuses a TRB, and [`ProducerRing::try_enqueue`] refuses at
-//!   [`ProducerRing::capacity`] only while the caller reports every completion through
-//!   [`ProducerRing::complete`]; the ring cannot see the controller's dequeue pointer.
+//! - [`ProducerRing::try_enqueue`] refuses at [`ProducerRing::capacity`] only while the caller
+//!   reports every completion through [`ProducerRing::complete`]; the ring cannot see the
+//!   controller's dequeue pointer.
 //! - The TRB builders do not check the 64 KiB rule (xHCI 1.2 section 6.4.1);
 //!   [`fits_one_transfer_request_block`] says whether a buffer crosses a boundary.
 
@@ -56,15 +60,11 @@
 struct ReadmeExample;
 
 pub mod context;
-pub mod direct_memory_access;
 pub mod extended_capabilities;
 pub mod port;
 pub mod registers;
 
 pub use registers::Capabilities;
-
-/// The page size every layout here is in.
-pub const PAGE_BYTES: u64 = 4096;
 
 /// **How long to wait for [`registers::STATUS_HALTED`]** after clearing [`registers::COMMAND_RUN`]. The controller halts
 /// within 16 ms (xHCI 1.2 section 5.4.1, Table 5-20); this is Linux's `XHCI_MAX_HALT_USEC`, twice
@@ -82,23 +82,22 @@ pub const COMMAND_COMPLETION_TIMEOUT_MILLISECONDS: u64 = 5000;
 /// [`TransferRequestBlock::kind`] or an [`Event::Other`] type against a named code.
 pub mod transfer_request_block_type;
 
-/// Completion codes (xHCI 1.2 section 6.4.5, Table 6-90): every code the specification defines,
-/// and [`completion::name`] for a transcript. Reach for them when deciding what a transfer or
-/// command completion event's code means.
-pub mod completion;
-
 #[cfg(test)]
 mod tests;
 
+mod completion;
 mod event;
+mod identity;
 mod ring;
 mod transfer_request_block;
 
+pub use completion::CompletionCode;
 pub use context::interrupt_interval;
 pub use event::Event;
+pub use identity::{DeviceContextIndex, PortNumber, PortSpeed, SlotId};
 pub use ring::{EventRing, ProducerRing, TransferRequestBlockPlacement};
 pub use transfer_request_block::{
-    TransferRequestBlock, TransferType, fits_one_transfer_request_block,
+    Direction, TransferRequestBlock, TransferType, fits_one_transfer_request_block,
 };
 
 #[cfg(kani)]

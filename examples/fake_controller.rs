@@ -9,12 +9,12 @@
 //! decodes the event, and reports it to the transfer ring so that `try_enqueue` has room again.
 //!
 //! Physical memory here is a vector of TRBs indexed by address. A real driver writes the same
-//! values into DMA memory with the ordering and barriers `ProducerRing::enqueue` and
+//! values into DMA memory with the ordering and barriers `ProducerRing::try_enqueue` and
 //! `EventRing::is_ready` describe.
 
 use extensible_host_controller_interface::{
-    Event, EventRing, ProducerRing, TransferRequestBlock, TransferType, completion,
-    transfer_request_block_type,
+    CompletionCode, DeviceContextIndex, Direction, Event, EventRing, ProducerRing, SlotId,
+    TransferRequestBlock, TransferType, context, transfer_request_block_type,
 };
 
 /// Where the fake's physical memory starts, and how many TRBs it holds.
@@ -27,8 +27,8 @@ const EVENT_RING: u64 = MEMORY_BASE + 0x100;
 /// The device's descriptor buffer: outside the TRB memory, since the fake moves no data.
 const DESCRIPTOR_BUFFER: u64 = 0x20_0000;
 /// The device slot and endpoint 0's device context index.
-const SLOT: u8 = 1;
-const ENDPOINT_ZERO: u8 = 1;
+const SLOT: SlotId = SlotId::new(1).unwrap();
+const ENDPOINT_ZERO: DeviceContextIndex = context::endpoint_index(0);
 
 /// The fake's memory: one TRB per 16 bytes from [`MEMORY_BASE`].
 struct Memory(Vec<TransferRequestBlock>);
@@ -54,7 +54,7 @@ struct FakeController {
 
 impl FakeController {
     /// What a doorbell does: run every TRB the driver produced, and write an event for each one
-    /// that asks for it (Interrupt On Completion, bit 5 of the last dword).
+    /// that asks for it (Interrupt On Completion).
     fn ring_doorbell(&mut self, memory: &mut Memory) {
         loop {
             let t = memory.read(self.dequeue);
@@ -62,14 +62,16 @@ impl FakeController {
                 return;
             }
             if t.kind() == transfer_request_block_type::LINK {
-                if t.0[3] & 1 << 1 != 0 {
+                let [low, high, _, control] = t.dwords();
+                // Toggle Cycle, bit 1 of the link's last dword.
+                if control & 1 << 1 != 0 {
                     self.consumer_cycle = !self.consumer_cycle;
                 }
-                self.dequeue = u64::from(t.0[0]) | u64::from(t.0[1]) << 32;
+                self.dequeue = u64::from(low) | u64::from(high) << 32;
                 continue;
             }
-            if t.0[3] & 1 << 5 != 0 {
-                self.post_transfer_event(memory, self.dequeue, completion::SUCCESS);
+            if t.interrupt_on_completion() {
+                self.post_transfer_event(memory, self.dequeue, CompletionCode::SUCCESS);
             }
             self.dequeue += 16;
         }
@@ -77,13 +79,13 @@ impl FakeController {
 
     /// Write a Transfer Event (xHCI 1.2 section 6.4.2.1) for the TRB at `pointer`: nothing left
     /// untransferred, completion `code`, the slot and endpoint, and this lap's cycle bit.
-    fn post_transfer_event(&mut self, memory: &mut Memory, pointer: u64, code: u8) {
-        let event = TransferRequestBlock([
+    fn post_transfer_event(&mut self, memory: &mut Memory, pointer: u64, code: CompletionCode) {
+        let event = TransferRequestBlock::from_dwords([
             pointer as u32,
             (pointer >> 32) as u32,
-            u32::from(code) << 24,
-            u32::from(SLOT) << 24
-                | u32::from(ENDPOINT_ZERO) << 16
+            u32::from(code.get()) << 24,
+            u32::from(SLOT.get()) << 24
+                | u32::from(ENDPOINT_ZERO.get()) << 16
                 | u32::from(transfer_request_block_type::TRANSFER_EVENT) << 10
                 | u32::from(self.event_cycle),
         ]);
@@ -97,7 +99,10 @@ impl FakeController {
 }
 
 fn main() {
-    let mut memory = Memory(vec![TransferRequestBlock([0; 4]); MEMORY_ENTRIES]);
+    let mut memory = Memory(vec![
+        TransferRequestBlock::from_dwords([0; 4]);
+        MEMORY_ENTRIES
+    ]);
     let mut transfers = ProducerRing::new(TRANSFER_RING, TRANSFER_RING_ENTRIES);
     let mut events = EventRing::new(EVENT_RING, EventRing::MINIMUM_SEGMENT_ENTRIES);
     let mut controller = FakeController {
@@ -117,8 +122,8 @@ fn main() {
     for round in 0..4 {
         let stages = [
             TransferRequestBlock::setup(packet, TransferType::DeviceToHost),
-            TransferRequestBlock::data(DESCRIPTOR_BUFFER, 18, true),
-            TransferRequestBlock::status(true),
+            TransferRequestBlock::data(DESCRIPTOR_BUFFER, 18, Direction::In),
+            TransferRequestBlock::status(Direction::Out),
         ];
         let mut status_at = 0;
         for stage in stages {
@@ -149,12 +154,13 @@ fn main() {
                     endpoint,
                     ..
                 } => {
-                    assert_eq!((slot, endpoint), (SLOT, ENDPOINT_ZERO));
+                    assert_eq!((slot, endpoint), (Some(SLOT), Some(ENDPOINT_ZERO)));
                     assert_eq!(transfer_request_block, status_at);
                     println!(
-                        "round {round}: transfer at {transfer_request_block:#x} on slot {slot} \
+                        "round {round}: transfer at {transfer_request_block:#x} on slot {} \
                          ended with {}",
-                        completion::name(code)
+                        SLOT.get(),
+                        code.name()
                     );
                     assert!(transfers.complete(transfer_request_block));
                     transfers_completed += 1;

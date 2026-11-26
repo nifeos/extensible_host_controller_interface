@@ -7,12 +7,12 @@ Expected to fail: the harness's `assert_ne!` of the indexes of two different end
 diff --git a/src/context.rs b/src/context.rs
 --- a/src/context.rs
 +++ b/src/context.rs
-@@ -23,7 +23,7 @@
-     if number == 0 {
+@@ -47,7 +47,7 @@ pub const fn endpoint_index(endpoint_number_and_direction: u8) -> DeviceContextI
+     DeviceContextIndex(if number == 0 {
          1
      } else {
 -        number * 2 + (endpoint_number_and_direction >> 7)
 +        number * 2
-     }
+     })
  }
  
