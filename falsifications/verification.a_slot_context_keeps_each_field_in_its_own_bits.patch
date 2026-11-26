@@ -7,8 +7,8 @@ Expected to fail: the harness's check that the speed id reads back from bits 20 
 diff --git a/src/context.rs b/src/context.rs
 --- a/src/context.rs
 +++ b/src/context.rs
-@@ -76,7 +76,7 @@ pub const fn input_control(add: u32, drop: u32) -> [u32; 8] {
- /// `entries`. Route string 0: the device is on a root port, not behind a hub.
+@@ -92,7 +92,7 @@
+ #[must_use]
  pub const fn slot(speed: PortSpeed, port: PortNumber, entries: DeviceContextIndex) -> [u32; 8] {
      [
 -        (speed.get() as u32) << 20 | (entries.get() as u32) << 27,
