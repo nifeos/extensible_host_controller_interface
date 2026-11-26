@@ -30,3 +30,5 @@ pub const TRANSFER_EVENT: u8 = 32;
 pub const COMMAND_COMPLETION: u8 = 33;
 /// Port Status Change Event.
 pub const PORT_STATUS_CHANGE: u8 = 34;
+/// Host Controller Event: the controller reports a condition of its own, such as Event Ring Full.
+pub const HOST_CONTROLLER_EVENT: u8 = 37;

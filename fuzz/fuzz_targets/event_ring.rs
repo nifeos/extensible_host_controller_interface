@@ -19,10 +19,11 @@ use libfuzzer_sys::fuzz_target;
 /// Where the segment sits: a page-aligned address with room for any entry count above it.
 const SEGMENT_BASE: u64 = 0x1_0000_0000;
 
-/// The three event type codes `Event::decode` gives a variant of its own (xHCI 1.2 Table 6-91).
+/// The four event type codes `Event::decode` gives a variant of its own (xHCI 1.2 Table 6-91).
 const TRANSFER_EVENT: u8 = 32;
 const COMMAND_COMPLETION: u8 = 33;
 const PORT_STATUS_CHANGE: u8 = 34;
+const HOST_CONTROLLER_EVENT: u8 = 37;
 
 /// Hold one decoded event to the TRB it came from.
 fn check_event(transfer_request_block: TransferRequestBlock) {
@@ -68,9 +69,21 @@ fn check_event(transfer_request_block: TransferRequestBlock) {
             assert_eq!(kind, PORT_STATUS_CHANGE);
             assert_eq!(port.map_or(0, PortNumber::get), (words[0] >> 24) as u8);
         }
+        Event::HostController { code, .. } => {
+            assert_eq!(kind, HOST_CONTROLLER_EVENT);
+            assert_eq!(code.get(), (words[2] >> 24) as u8);
+        }
         Event::Other { kind: other, .. } => {
             assert_eq!(other, kind);
-            assert!(![TRANSFER_EVENT, COMMAND_COMPLETION, PORT_STATUS_CHANGE].contains(&other));
+            assert!(
+                ![
+                    TRANSFER_EVENT,
+                    COMMAND_COMPLETION,
+                    PORT_STATUS_CHANGE,
+                    HOST_CONTROLLER_EVENT
+                ]
+                .contains(&other)
+            );
         }
         // `Event` is non-exhaustive: a variant added later fails here until the target holds it.
         unknown => panic!("an event this target does not hold: {unknown:?}"),

@@ -292,8 +292,15 @@ fn every_command_decodes_back_to_its_slot_endpoint_and_pointer() {
     );
     // An event type the crate does not decode decodes as itself, never as a known one.
     assert_eq!(
-        Event::decode(TransferRequestBlock([0, 0, 0, 37 << 10])),
-        Event::Other { kind: 37 }
+        Event::decode(TransferRequestBlock([0, 0, 0, 38 << 10])),
+        Event::Other { kind: 38 }
+    );
+    // A Host Controller Event keeps its code: Event Ring Full is 21.
+    assert_eq!(
+        Event::decode(TransferRequestBlock([0, 0, 21 << 24, 37 << 10 | 1])),
+        Event::HostController {
+            code: CompletionCode::EVENT_RING_FULL_ERROR
+        }
     );
     let ring = EventRing::new(0x2000, 16);
     assert_eq!(ring.index(), 0);

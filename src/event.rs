@@ -43,6 +43,14 @@ pub enum Event {
         /// The port, or `None` when the field reads 0, the reserved port number.
         port: Option<PortNumber>,
     },
+    /// The controller reports a condition of its own (xHCI 1.2 section 6.4.2.6), named by the
+    /// code: [`CompletionCode::EVENT_RING_FULL_ERROR`] when the event ring filled and events were
+    /// lost.
+    #[non_exhaustive]
+    HostController {
+        /// The completion code.
+        code: CompletionCode,
+    },
     /// Any other event type, which this crate does not decode.
     #[non_exhaustive]
     Other {
@@ -103,6 +111,7 @@ impl Event {
             transfer_request_block_type::PORT_STATUS_CHANGE => Event::PortStatus {
                 port: PortNumber::new((words[0] >> 24) as u8),
             },
+            transfer_request_block_type::HOST_CONTROLLER_EVENT => Event::HostController { code },
             kind => Event::Other { kind },
         }
     }

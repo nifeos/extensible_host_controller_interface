@@ -250,7 +250,8 @@ fn the_interrupt_interval_is_the_exponent_the_specification_asks_for() {
 /// bits**, for any four dwords the controller writes (xHCI 1.2 sections 6.4.2.1 to 6.4.2.3). The
 /// Transfer Event's pointer reassembles from dwords 0 and 1, its residual is the 24-bit length,
 /// its completion code is the top byte of dword 2, its endpoint is the five-bit Endpoint ID and its
-/// slot is the top byte of dword 3. The cycle bit never changes what an event says.
+/// slot is the top byte of dword 3. A Host Controller Event's code is the top byte of dword 2.
+/// The cycle bit never changes what an event says.
 #[kani::proof]
 fn every_event_decodes_from_the_bits_the_specification_gives() {
     let words: [u32; 4] = kani::any();
@@ -289,12 +290,17 @@ fn every_event_decodes_from_the_bits_the_specification_gives() {
             assert_eq!(kind, transfer_request_block_type::PORT_STATUS_CHANGE);
             assert_eq!(port.map_or(0, PortNumber::get) as u32, words[0] >> 24);
         }
+        Event::HostController { code } => {
+            assert_eq!(kind, transfer_request_block_type::HOST_CONTROLLER_EVENT);
+            assert_eq!(code.get() as u32, words[2] >> 24);
+        }
         Event::Other { kind: other } => {
             assert_eq!(other, kind);
             assert!(
                 kind != transfer_request_block_type::TRANSFER_EVENT
                     && kind != transfer_request_block_type::COMMAND_COMPLETION
                     && kind != transfer_request_block_type::PORT_STATUS_CHANGE
+                    && kind != transfer_request_block_type::HOST_CONTROLLER_EVENT
             );
         }
     }
