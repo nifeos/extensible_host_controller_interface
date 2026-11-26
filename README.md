@@ -191,7 +191,8 @@ the assertion that the patch breaks. `git checkout -- src` reverts the patch.
   has a speed id count other than 0 defines its own, and the crate does not decode its Protocol
   Speed ID dwords.
 - No streams, isochronous or bulk transfers: the crate builds the TRBs a boot keyboard needs and
-  nothing more.
+  nothing more. The data builders take a `u16` length, so one TRB carries at most 65,535 bytes of
+  the 65,536 the Transfer Length field allows.
 - `ProducerRing::try_enqueue` refuses at `ProducerRing::capacity` only while the caller reports
   every completion through `ProducerRing::complete`. A caller that stops reporting sees the ring
   fill and refuse, not overwrite: the ring cannot see the controller's dequeue pointer.

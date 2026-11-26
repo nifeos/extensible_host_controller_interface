@@ -54,6 +54,7 @@ pub(crate) const CYCLE_BIT_AND_CLEARED_WORD_DO_NOT_OVERLAP: () = assert!(((!1u32
 /// not cross a 64 KiB boundary. A data buffer that a Transfer TRB references shall not span one
 /// (xHCI 1.2 section 6.4.1, the note on 64 KiB boundaries); software chains several TRBs for a
 /// buffer that does. A buffer that ends exactly at a boundary fits, and so does an empty one.
+/// `len` is a `u16`, as the TRB builders take it, so a whole 64 KiB buffer is not asked about.
 pub const fn fits_one_transfer_request_block(buffer: u64, len: u16) -> bool {
     (buffer & 0xffff) + len as u64 <= 0x1_0000
 }
@@ -320,6 +321,10 @@ impl TransferRequestBlock {
     /// which agrees with the Setup Stage's [`TransferType`]. The bytes must not cross a 64 KiB
     /// boundary ([`fits_one_transfer_request_block`] says whether they do); this builder does not
     /// check.
+    ///
+    /// `len` is a `u16`, so one TRB carries at most 65,535 bytes, though the Transfer Length field
+    /// holds 17 bits and a TRB may carry 65,536 (xHCI 1.2 section 6.4.1.1). A control or interrupt
+    /// transfer never comes near that; a builder for bulk transfers would take a `u32`.
     #[must_use]
     pub const fn data(buffer: u64, len: u16, direction: Direction) -> TransferRequestBlock {
         TransferRequestBlock::pointer(
@@ -364,6 +369,10 @@ impl TransferRequestBlock {
     /// packet. What an interrupt `IN` endpoint's ring holds. The bytes must not cross a 64 KiB
     /// boundary ([`fits_one_transfer_request_block`] says whether they do); this builder does not
     /// check.
+    ///
+    /// `len` is a `u16`, so one TRB carries at most 65,535 bytes, though the Transfer Length field
+    /// holds 17 bits and a TRB may carry 65,536 (xHCI 1.2 section 6.4.1.1). A control or interrupt
+    /// transfer never comes near that; a builder for bulk transfers would take a `u32`.
     #[must_use]
     pub const fn normal(buffer: u64, len: u16) -> TransferRequestBlock {
         TransferRequestBlock::pointer(

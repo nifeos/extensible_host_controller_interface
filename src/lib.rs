@@ -42,7 +42,9 @@
 
 //! # BUGS
 //!
-//! - No streams, isochronous or bulk: the TRBs a keyboard needs and nothing more.
+//! - No streams, isochronous or bulk: the TRBs a keyboard needs and nothing more. The data
+//!   builders take a `u16` length, so one TRB carries at most 65,535 bytes of the 65,536 the
+//!   Transfer Length field allows.
 //! - Speeds are the default ids, the associated constants of [`PortSpeed`]: a controller whose
 //!   [`extended_capabilities::SupportedProtocol::speed_id_count`] is not 0 defines its own, and
 //!   nothing here decodes its Protocol Speed ID dwords.
