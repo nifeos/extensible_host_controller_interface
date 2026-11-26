@@ -22,10 +22,6 @@ const TRANSFER_EVENT: u8 = 32;
 const COMMAND_COMPLETION: u8 = 33;
 const PORT_STATUS_CHANGE: u8 = 34;
 
-fn dword(bytes: &[u8]) -> u32 {
-    u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
-}
-
 /// Hold one decoded event to the TRB it came from.
 fn check_event(transfer_request_block: TransferRequestBlock) {
     let words = transfer_request_block.dwords();
@@ -88,12 +84,7 @@ fuzz_target!(|data: &[u8]| {
     let mut segment = vec![TransferRequestBlock::from_dwords([0; 4]); usize::from(entries)];
     let mut write_index = 0usize;
     for chunk in writes.as_chunks::<16>().0 {
-        segment[write_index] = TransferRequestBlock::from_dwords([
-            dword(&chunk[0..4]),
-            dword(&chunk[4..8]),
-            dword(&chunk[8..12]),
-            dword(&chunk[12..16]),
-        ]);
+        segment[write_index] = TransferRequestBlock::from_le_bytes(*chunk);
         write_index = (write_index + 1) % segment.len();
 
         // A segment holds `entries` events, so a drain that consumes more than a lap has followed

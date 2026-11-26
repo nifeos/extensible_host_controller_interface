@@ -531,3 +531,12 @@ fn a_transfer_request_block_round_trips_its_dwords() {
     assert!(TransferRequestBlock::status(false).interrupt_on_completion());
     assert!(!TransferRequestBlock::setup(0, TransferType::NoDataStage).interrupt_on_completion());
 }
+
+/// The byte form puts each dword's least significant byte first, and reads back to the same TRB.
+#[test]
+fn a_transfer_request_block_has_a_little_endian_byte_form() {
+    let t = TransferRequestBlock::from_dwords([0x0403_0201, 0x0807_0605, 0x0c0b_0a09, 0x100f_0e0d]);
+    let bytes = t.to_le_bytes();
+    assert_eq!(bytes, core::array::from_fn(|i| i as u8 + 1));
+    assert_eq!(TransferRequestBlock::from_le_bytes(bytes), t);
+}

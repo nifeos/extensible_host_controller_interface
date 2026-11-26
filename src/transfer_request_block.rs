@@ -99,6 +99,45 @@ impl TransferRequestBlock {
         self.0
     }
 
+    /// **The TRB as the controller reads it**: sixteen bytes, each dword little-endian, for a
+    /// caller that writes memory a byte at a time or runs big-endian.
+    ///
+    /// ```
+    /// use extensible_host_controller_interface::TransferRequestBlock;
+    ///
+    /// let bytes = TransferRequestBlock::enable_slot().to_le_bytes();
+    /// assert_eq!(bytes[12..], [0x00, 0x24, 0x00, 0x00]); // type 9 at bits 10 to 15
+    /// assert_eq!(TransferRequestBlock::from_le_bytes(bytes), TransferRequestBlock::enable_slot());
+    /// ```
+    pub const fn to_le_bytes(&self) -> [u8; 16] {
+        let mut bytes = [0; 16];
+        let mut dword = 0;
+        while dword < 4 {
+            let le = self.0[dword].to_le_bytes();
+            let mut byte = 0;
+            while byte < 4 {
+                bytes[dword * 4 + byte] = le[byte];
+                byte += 1;
+            }
+            dword += 1;
+        }
+        bytes
+    }
+
+    /// **A TRB from the sixteen bytes the controller wrote**, each dword little-endian: the
+    /// inverse of [`TransferRequestBlock::to_le_bytes`].
+    pub const fn from_le_bytes(bytes: [u8; 16]) -> TransferRequestBlock {
+        let mut words = [0; 4];
+        let mut dword = 0;
+        while dword < 4 {
+            let at = dword * 4;
+            words[dword] =
+                u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
+            dword += 1;
+        }
+        TransferRequestBlock(words)
+    }
+
     /// (`interrupt_on_completion`, xHCI 1.2 specification section 6.4.1.1) Whether the TRB asks the
     /// controller for an event when it completes: the Interrupt On Completion bit, bit 5 of
     /// dword 3.
