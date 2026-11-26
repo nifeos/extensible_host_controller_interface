@@ -24,6 +24,13 @@ impl CompletionCode {
     }
 
     /// The code's byte.
+    ///
+    /// ```
+    /// use extensible_host_controller_interface::CompletionCode;
+    ///
+    /// assert_eq!(CompletionCode::SHORT_PACKET.get(), 13);
+    /// assert_eq!(CompletionCode::new(200).get(), 200);
+    /// ```
     pub const fn get(self) -> u8 {
         self.0
     }

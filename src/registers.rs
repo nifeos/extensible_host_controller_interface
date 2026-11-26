@@ -409,6 +409,10 @@ mod tests {
         assert_eq!(capabilities.maximum_ports(), 8);
         assert_eq!(capabilities.scratchpads(), 0);
         assert_eq!(capabilities.context_bytes(), 32);
+        assert_eq!(
+            (capabilities.doorbells(), capabilities.runtime()),
+            (0x2000, 0x1000)
+        );
         assert_eq!(capabilities.extended(), 0x20); // the dword count in HCCPARAMS1's high half, times four
         assert!(!capabilities.has_64_bit_addressing());
         assert_eq!(capabilities.maximum_event_ring_segments(), 1);
