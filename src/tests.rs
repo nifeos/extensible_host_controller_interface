@@ -538,8 +538,10 @@ fn complete_refuses_what_is_not_outstanding() {
     let a = ring
         .try_enqueue(TransferRequestBlock::enable_slot())
         .unwrap();
-    ring.try_enqueue(TransferRequestBlock::enable_slot())
-        .unwrap();
+    assert!(
+        ring.try_enqueue(TransferRequestBlock::enable_slot())
+            .is_some()
+    );
     let before = ring;
     for physical_address in [0xff0, 0x1008, 0x1030, 0x1040, 0x1020] {
         assert!(!ring.complete(physical_address), "{physical_address:#x}");
@@ -561,27 +563,37 @@ fn complete_refuses_what_is_not_outstanding() {
 fn complete_counts_by_entry_index_across_the_wrap() {
     let mut ring = ProducerRing::new(0x1000, 4);
     for _ in 0..2 {
-        ring.try_enqueue(TransferRequestBlock::enable_slot())
-            .unwrap();
+        assert!(
+            ring.try_enqueue(TransferRequestBlock::enable_slot())
+                .is_some()
+        );
     }
     assert!(ring.complete(0x1010));
-    ring.try_enqueue(TransferRequestBlock::enable_slot())
-        .unwrap();
-    ring.try_enqueue(TransferRequestBlock::enable_slot())
-        .unwrap();
+    assert!(
+        ring.try_enqueue(TransferRequestBlock::enable_slot())
+            .is_some()
+    );
+    assert!(
+        ring.try_enqueue(TransferRequestBlock::enable_slot())
+            .is_some()
+    );
     let before = ring;
     assert!(!ring.complete(0x1030));
     assert_eq!(ring, before);
 
     let mut ring = ProducerRing::new(0x1000, 8);
     for _ in 0..3 {
-        ring.try_enqueue(TransferRequestBlock::enable_slot())
-            .unwrap();
+        assert!(
+            ring.try_enqueue(TransferRequestBlock::enable_slot())
+                .is_some()
+        );
     }
     assert!(ring.complete(0x1010));
     for _ in 0..5 {
-        ring.try_enqueue(TransferRequestBlock::enable_slot())
-            .unwrap();
+        assert!(
+            ring.try_enqueue(TransferRequestBlock::enable_slot())
+                .is_some()
+        );
     }
     assert_eq!(ring.try_enqueue(TransferRequestBlock::enable_slot()), None);
 }

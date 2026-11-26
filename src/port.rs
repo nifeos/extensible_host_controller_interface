@@ -127,7 +127,7 @@ pub const fn speed_name(speed: PortSpeed) -> &'static str {
 /// [`DEBOUNCE_STABLE_MILLISECONDS`], read every [`DEBOUNCE_STEP_MILLISECONDS`], giving up at [`DEBOUNCE_TIMEOUT_MILLISECONDS`].
 /// The clock starts when the ports are powered, so nothing is believed before
 /// [`DEBOUNCE_STABLE_MILLISECONDS`] after power either. The numbers are Linux's (`drivers/usb/core/hub.c`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PortDebounce {
     start_milliseconds: u64,
     changed_milliseconds: u64,
@@ -155,7 +155,7 @@ pub const POWER_ON_WAIT_MILLISECONDS: u64 = 20;
 pub const RESET_TIMEOUT_MILLISECONDS: u64 = 800;
 
 /// **What [`PortDebounce::sample`] says**, after each read of the ports.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum DebounceVerdict {
     /// Keep reading: the ports have changed within [`DEBOUNCE_STABLE_MILLISECONDS`], and the wait

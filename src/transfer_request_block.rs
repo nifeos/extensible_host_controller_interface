@@ -9,7 +9,7 @@ use super::*;
 ///
 /// The dwords are private, so the builders below are the way to make one. A TRB the controller
 /// wrote, such as an event, comes in through [`TransferRequestBlock::from_dwords`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TransferRequestBlock(pub(crate) [u32; 4]);
 
 /// Interrupt On Completion: ask for an event when this TRB completes.
@@ -60,7 +60,7 @@ pub const fn fits_one_transfer_request_block(buffer: u64, len: u16) -> bool {
 
 /// **A control transfer's shape**: the Transfer Type field of its Setup Stage TRB (xHCI 1.2
 /// section 6.4.1.2.1), each variant's value its code. Code 1 is reserved and has no variant.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 #[doc(alias = "TRT")]
 pub enum TransferType {
@@ -78,7 +78,7 @@ pub enum TransferType {
 /// **Which way a stage's data flows**, as the Direction field of a Data or Status Stage TRB gives
 /// it (xHCI 1.2 sections 6.4.1.2.2 and 6.4.1.2.3). The names are the USB specification's, which
 /// are the host's point of view.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[doc(alias = "DIR")]
 pub enum Direction {
     /// Host to device: Direction 0.
@@ -199,6 +199,7 @@ impl TransferRequestBlock {
 
     /// A link TRB back to `target` with Toggle Cycle set, which is what flips the consumer's
     /// cycle as it follows the link.
+    #[must_use]
     pub const fn link(target: u64) -> TransferRequestBlock {
         TransferRequestBlock::pointer(
             target,
@@ -207,11 +208,13 @@ impl TransferRequestBlock {
     }
 
     /// Enable Slot: ask the controller for a device slot.
+    #[must_use]
     pub const fn enable_slot() -> TransferRequestBlock {
         TransferRequestBlock([0, 0, 0, control(transfer_request_block_type::ENABLE_SLOT)])
     }
 
     /// Disable Slot `slot`: give it back.
+    #[must_use]
     pub const fn disable_slot(slot: SlotId) -> TransferRequestBlock {
         TransferRequestBlock([
             0,
@@ -224,6 +227,7 @@ impl TransferRequestBlock {
     /// (`address_device`, xHCI 1.2 specification section 4.6.5) Address Device: take the input
     /// context at `input` (physical) for `slot`, and send the device its address.
     #[doc(alias = "Address Device command")]
+    #[must_use]
     pub const fn address_device(input: u64, slot: SlotId) -> TransferRequestBlock {
         TransferRequestBlock::pointer(
             input,
@@ -236,6 +240,7 @@ impl TransferRequestBlock {
     }
 
     /// Configure Endpoint: add the endpoints the input context's add flags name.
+    #[must_use]
     pub const fn configure_endpoint(input: u64, slot: SlotId) -> TransferRequestBlock {
         TransferRequestBlock::pointer(
             input,
@@ -249,6 +254,7 @@ impl TransferRequestBlock {
 
     /// Evaluate Context: update the fields the input context names (here, endpoint 0's packet
     /// size once the device has said what it is).
+    #[must_use]
     pub const fn evaluate_context(input: u64, slot: SlotId) -> TransferRequestBlock {
         TransferRequestBlock::pointer(
             input,
@@ -261,6 +267,7 @@ impl TransferRequestBlock {
 
     /// Reset Endpoint `device_context_index` of `slot`, after a stall halted it. The index is at
     /// most 31, so it keeps to the five bits of the Endpoint ID field (xHCI 1.2 section 6.4.3.7).
+    #[must_use]
     pub const fn reset_endpoint(
         slot: SlotId,
         device_context_index: DeviceContextIndex,
@@ -279,6 +286,7 @@ impl TransferRequestBlock {
     /// position with the consumer cycle in bit 0, [`ProducerRing::dequeue_pointer`]), skipping
     /// what a stall left on the ring. The index is at most 31, so it keeps to the five bits of the
     /// Endpoint ID field (xHCI 1.2 section 6.4.3.9).
+    #[must_use]
     pub const fn set_dequeue(
         pointer: u64,
         slot: SlotId,
@@ -297,6 +305,7 @@ impl TransferRequestBlock {
 
     /// A control transfer's Setup Stage, the eight-byte packet carried immediately, and
     /// `transfer_type` saying whether a Data Stage follows and which way it flows.
+    #[must_use]
     pub const fn setup(packet: u64, transfer_type: TransferType) -> TransferRequestBlock {
         let transfer_type = transfer_type as u32;
         TransferRequestBlock([
@@ -311,6 +320,7 @@ impl TransferRequestBlock {
     /// which agrees with the Setup Stage's [`TransferType`]. The bytes must not cross a 64 KiB
     /// boundary ([`fits_one_transfer_request_block`] says whether they do); this builder does not
     /// check.
+    #[must_use]
     pub const fn data(buffer: u64, len: u16, direction: Direction) -> TransferRequestBlock {
         TransferRequestBlock::pointer(
             buffer,
@@ -338,6 +348,7 @@ impl TransferRequestBlock {
     /// ];
     /// assert!(stages[2].interrupt_on_completion());
     /// ```
+    #[must_use]
     pub const fn status(direction: Direction) -> TransferRequestBlock {
         TransferRequestBlock([
             0,
@@ -353,6 +364,7 @@ impl TransferRequestBlock {
     /// packet. What an interrupt `IN` endpoint's ring holds. The bytes must not cross a 64 KiB
     /// boundary ([`fits_one_transfer_request_block`] says whether they do); this builder does not
     /// check.
+    #[must_use]
     pub const fn normal(buffer: u64, len: u16) -> TransferRequestBlock {
         TransferRequestBlock::pointer(
             buffer,

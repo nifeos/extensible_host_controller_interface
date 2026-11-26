@@ -36,7 +36,7 @@ use super::*;
 /// assert_eq!((d.index, d.transfer_request_block.is_cycle()), (0, false)); // second lap, cycle flipped
 /// assert_eq!(ring.entry_physical_address(d.index), 0x1000);
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ProducerRing {
     pub(crate) base: u64,
     pub(crate) entries: u16,
@@ -55,8 +55,9 @@ pub struct ProducerRing {
 /// a TRB's cycle bit matches, the controller treats it as not yet produced, so the dword that
 /// carries it goes in after the rest. [`ProducerRing::try_enqueue`] states the order and the
 /// barriers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
+#[must_use = "the TRB, and on the last entry of a lap the link, must be written to the ring"]
 pub struct TransferRequestBlockPlacement {
     /// Where the TRB goes.
     pub index: u16,
@@ -135,6 +136,7 @@ impl ProducerRing {
     /// same way after it. Last comes a write barrier that orders all of that memory before the
     /// doorbell register write. On a weakly ordered machine (aarch64, riscv64) both barriers are
     /// instructions, not only compiler fences; Linux spells them `wmb()`.
+    #[must_use]
     pub fn try_enqueue(
         &mut self,
         transfer_request_block: TransferRequestBlock,
@@ -150,6 +152,7 @@ impl ProducerRing {
     /// their entries are free for [`try_enqueue`](Self::try_enqueue). Answers `false`, and changes
     /// nothing, when the address is not an outstanding TRB of this ring, such as a stale or
     /// foreign event.
+    #[must_use]
     pub fn complete(&mut self, transfer_request_block_physical_address: u64) -> bool {
         let usable = self.entries - 1;
         let Some(offset) = transfer_request_block_physical_address.checked_sub(self.base) else {
@@ -194,7 +197,7 @@ impl ProducerRing {
 }
 
 /// **The event ring, from the consumer's side**: one segment of `entries` TRBs at a physical base.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EventRing {
     pub(crate) base: u64,
     pub(crate) entries: u16,

@@ -15,7 +15,7 @@ use crate::{DeviceContextIndex, PortNumber, PortSpeed};
 
 /// **The Endpoint Type field of an endpoint context** (xHCI 1.2 Table 6-9), each variant's value
 /// its code. Code 0, Not Valid, has no variant: [`endpoint`] builds only a valid context.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 #[doc(alias = "EP Type")]
 pub enum EndpointType {
@@ -65,12 +65,14 @@ pub const fn device_offset(device_context_index: u8, context_bytes: u64) -> u64 
 
 /// **The input control context**: `add` and `drop` are bitmaps of context indices (bit 0 the slot
 /// context, bit `n` DCI `n`).
+#[must_use]
 pub const fn input_control(add: u32, drop: u32) -> [u32; 8] {
     [drop, add, 0, 0, 0, 0, 0, 0]
 }
 
 /// **A slot context for a device on root port `port`** at `speed`, whose highest context is DCI
 /// `entries`. Route string 0: the device is on a root port, not behind a hub.
+#[must_use]
 pub const fn slot(speed: PortSpeed, port: PortNumber, entries: DeviceContextIndex) -> [u32; 8] {
     [
         (speed.get() as u32) << 20 | (entries.get() as u32) << 27,
@@ -108,6 +110,7 @@ pub const fn slot_device_number(context: &[u32; 8]) -> u8 {
 /// so nothing spills into the reserved bit, Host Initiate Disable or Max Burst Size beside it.
 /// Every [`EndpointType`] code fits those bits today; the mask keeps the field its width if a code
 /// ever does not.
+#[must_use]
 pub const fn endpoint(
     kind: EndpointType,
     maximum_packet: u16,
@@ -148,6 +151,7 @@ pub(crate) const ENDPOINT_CONTEXT_FIELDS_DO_NOT_OVERLAP: () = assert!(
 
 /// Endpoint 0's context with a new packet size, everything else as [`endpoint`] built it for
 /// `dequeue`: what Evaluate Context takes once the device's descriptor has said its size.
+#[must_use]
 pub const fn control_endpoint(maximum_packet: u16, dequeue: u64) -> [u32; 8] {
     endpoint(EndpointType::Control, maximum_packet, 0, dequeue, 8)
 }
